@@ -19,8 +19,10 @@ How to cut a release, from a version bump to a notarized DMG on GitHub. Maintain
 2. *Settings → General*: upload `assets/branding/social-preview.png` as the **social preview**; enable **Discussions**.
 3. *Settings → Code security*: enable **private vulnerability reporting**, **Dependabot alerts and security updates**,
    **secret scanning** and **push protection**. CodeQL and Scorecard workflows are already in `.github/workflows/`.
-4. *Settings → Branches*: protect `main`: require a pull request and one review (code owners), require the checks
-   **Go tests**, **Frontend**, **Wails build**, **Signed-off-by** and **CodeQL**, require linear history, and disallow force pushes.
+4. *Settings → Branches*: protect `main`: require a pull request (and one code-owner review once the project has more
+   than one maintainer), require the checks **Go tests (ubuntu-latest)**, **Go tests (macos-latest)**, **Frontend**,
+   **Wails build (macOS)**, **Signed-off-by**, **Analyze (go)** and **Analyze (javascript-typescript)**, require linear
+   history, and disallow force pushes and deletions.
 5. *Settings → Actions*: allow actions from GitHub and verified creators only, and set the default workflow token to
    read-only. Workflows pin third-party actions to commit SHAs; Dependabot proposes updates.
 6. Add the topics `kubernetes`, `desktop`, `macos`, `wails`, `devops`, and a one-line description.
