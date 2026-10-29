@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme="dark-black"], [data-theme="dark-black"] *, [data-theme="dark-blue"], [data-theme="dark-blue"] *));
+
+/* Semantic tokens. Components use these only; never raw colors. */
+:root,
+[data-theme='dark-black'] {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-hover: #1f1f23;
+  --border: #26262b;
+  --fg: #ececef;
+  --fg-muted: #8b8b94;
+  --accent: #5b8def;
+  --accent-fg: #ffffff;
+  --success: #3fb97f;
+  --warning: #e0a63a;
+  --danger: #e5584f;
+  --hotbar: #070708;
+}
+
+[data-theme='dark-blue'] {
+  color-scheme: dark;
+  --bg: #0b1220;
+  --surface: #101a2c;
+  --surface-2: #152238;
+  --surface-hover: #1b2b46;
+  --border: #223452;
+  --fg: #e6edf8;
+  --fg-muted: #8196b8;
+  --accent: #4aa3ff;
+  --accent-fg: #04101f;
+  --success: #3fcf9a;
+  --warning: #f0b84a;
+  --danger: #f2655c;
+  --hotbar: #08101d;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f1f4;
+  --surface-hover: #e7e9ee;
+  --border: #dcdee4;
+  --fg: #16181d;
+  --fg-muted: #626875;
+  --accent: #2f6fe0;
+  --accent-fg: #ffffff;
+  --success: #1f9d63;
+  --warning: #b97d0e;
+  --danger: #d1403a;
+  --hotbar: #e9ebf0;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-hotbar: var(--hotbar);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* Wails: elements with this property drag the frameless window. */
+.drag {
+  --wails-draggable: drag;
+}
+.no-drag {
+  --wails-draggable: no-drag;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Keyboard focus: visible, themed, and only for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-offset: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

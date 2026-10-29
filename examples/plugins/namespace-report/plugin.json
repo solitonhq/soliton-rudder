@@ -1,0 +1,30 @@
+{
+  "id": "io.soliton.namespace-report",
+  "name": "Namespace Report",
+  "version": "1.0.0",
+  "description": "Lists namespaces with their pod counts and flags namespaces that have no owner label. Example of a plugin with a UI panel, a command and a custom assessment rule.",
+  "author": "Soliton Rudder",
+  "apiVersion": 1,
+  "permissions": ["clusters.read", "kube.read", "ui.notify"],
+  "backend": { "command": "node", "args": ["backend.js"] },
+  "ui": {
+    "root": "ui",
+    "panels": [
+      { "id": "report", "title": "Namespace Report", "entry": "index.html", "placement": "cluster-nav", "icon": "bar-chart" }
+    ]
+  },
+  "commands": [
+    { "id": "scan", "title": "Namespace Report: scan now" },
+    { "id": "open", "title": "Namespace Report: open panel", "panel": "report" }
+  ],
+  "assessmentRules": [
+    {
+      "id": "ns-owner-label",
+      "title": "Namespaces without an owner label",
+      "category": "maintenance",
+      "severity": "low",
+      "description": "Every namespace should carry an `owner` or `team` label so incidents and costs can be routed to someone.",
+      "remediation": "Add a label, e.g. kubectl label namespace <name> owner=<team>."
+    }
+  ]
+}

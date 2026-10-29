@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.icns binary
+*.jpeg binary
+*.jpg binary
+frontend/wailsjs/** linguist-generated
+THIRD_PARTY_NOTICES.txt linguist-generated
+docs/ASSESSMENT-RULES.md linguist-generated

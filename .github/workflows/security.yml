@@ -1,0 +1,44 @@
+name: Security scan
+
+# Known vulnerabilities are found when they are published, not when someone next opens a pull request.
+on:
+  schedule:
+    - cron: '17 5 * * 1'   # Mondays
+  workflow_dispatch:
+  pull_request:
+    paths: ['go.mod', 'go.sum', 'frontend/package.json', 'frontend/package-lock.json']
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck (Go)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: npm ci && npm run build
+        working-directory: frontend
+      # fails when vulnerable code is actually reachable from this program
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 . ./cmd/... ./internal/...
+
+  npm-audit:
+    name: npm audit (frontend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: frontend
+      - run: npm audit --audit-level=high
+        working-directory: frontend

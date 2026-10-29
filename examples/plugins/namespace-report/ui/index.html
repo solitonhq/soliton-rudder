@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Namespace Report</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Namespace Report</h1>
+    <span id="cluster" class="muted"></span>
+    <button id="reload">Reload</button>
+  </header>
+  <p id="status" class="muted">Waiting for a cluster…</p>
+  <table id="table" hidden>
+    <thead><tr><th>Namespace</th><th class="num">Pods</th><th>Owner</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <!-- the SDK handles the postMessage bridge and applies the app theme -->
+  <script src="/plugins/sdk.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

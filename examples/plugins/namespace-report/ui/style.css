@@ -1,0 +1,12 @@
+/* Theme variables (--bg, --fg, --surface, --border, --accent, --danger, --fg-muted …) are injected by the SDK. */
+body { margin: 0; padding: 20px; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--fg); }
+header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+h1 { font-size: 16px; margin: 0; }
+.muted { color: var(--fg-muted); }
+button { margin-left: auto; background: var(--surface-2); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+button:hover { background: var(--surface-hover); }
+table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--border); }
+th { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-muted); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.warn { color: var(--warning); }

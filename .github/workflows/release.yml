@@ -1,0 +1,93 @@
+name: Release
+
+# Pushing a tag like v0.2.0 builds the universal DMG and publishes a GitHub Release.
+# Tags with a suffix (v0.2.0-rc1) are published as pre-releases.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write       # build provenance attestation
+  attestations: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      # `secrets` can't be read in step-level `if`, so expose "is it set?" as job-level booleans
+      HAS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+      HAS_NOTARY: ${{ secrets.NOTARY_APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.17.0
+
+      - name: No unfinished placeholders are shipped
+        run: ./scripts/check-placeholders.sh
+
+      - name: Check the tag matches the VERSION file
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$tag" != "$(tr -d '[:space:]' < VERSION)" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION ($(cat VERSION))"; exit 1
+          fi
+
+      - name: Import signing certificate (optional)
+        if: env.HAS_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$MACOS_CERTIFICATE" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          rm cert.p12
+
+      - name: Store notarization credentials (optional)
+        if: env.HAS_NOTARY == 'true'
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: |
+          xcrun notarytool store-credentials rudder-notary \
+            --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD"
+
+      - name: Build DMG
+        env:
+          REPO: ${{ github.repository }}
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY || '-' }}
+          NOTARY_PROFILE: ${{ secrets.NOTARY_APPLE_ID != '' && 'rudder-notary' || '' }}
+        run: ./scripts/build-dmg.sh
+
+      - name: Software bill of materials
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: dist/SolitonRudder-sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: dist/*.dmg
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=(--generate-notes --title "Soliton Rudder ${GITHUB_REF_NAME#v}")
+          case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease);; esac
+          gh release create "$GITHUB_REF_NAME" dist/*.dmg dist/*.sha256 dist/*-sbom.cdx.json "${flags[@]}"
