@@ -29,7 +29,7 @@ lint: ## go vet, staticcheck, gofmt, eslint, tsc
 	cd frontend && npm run lint && npx tsc --noEmit
 
 vuln: ## known vulnerabilities in Go and npm dependencies (needs network)
-	go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 $(GOPKGS)
+	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 $(GOPKGS)
 	cd frontend && npm audit --audit-level=high
 
 fmt: ## format Go and frontend code

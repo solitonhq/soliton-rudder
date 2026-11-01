@@ -35,7 +35,9 @@ Everything Soliton Rudder can do, grouped by what you're trying to accomplish. F
 
 The **hotbar** is the rail on the left. From top to bottom: the logo (Home), **Home**, your **pinned** clusters and the
 ones that are **connected**, **+** (add), the three theme dots, **Compare clusters**, and **Settings**. **Home lists every
-cluster**; pin the ones you use most with the pin button on their card (or right-click → *Pin to hotbar*).
+cluster**; pin the ones you use most with the pin button on their card (or right-click → *Pin to hotbar*). Pinned clusters
+come first; clusters that are only open (connected but not pinned) follow below a thin divider and leave the hotbar when
+you disconnect them. A small bar on the rail's outer edge marks the cluster you are looking at.
 
 **Connecting.** A cluster connects when you open it, or with the plug button on its Home card (or right-click →
 *Connect*). *Disconnect* (plug button or right-click) closes the connection: live views stop, the cluster's port-forwards
@@ -102,7 +104,7 @@ Click a row. Tabs: **Overview**, **Data** (ConfigMaps/Secrets only), **YAML**.
 
 ## Editing, scaling, restarting, deleting
 
-- **YAML tab**: edit, then **Save**. It performs an update with optimistic concurrency, so a conflicting change
+- **YAML tab**: edit, then **Save**. **⌘F** / **Ctrl+F** opens find (**⌘G** / **F3** next, **⇧F3** previous, **Esc** closes). It performs an update with optimistic concurrency, so a conflicting change
   made elsewhere is reported instead of overwritten. `managedFields` are hidden to keep the text readable.
 - **Scale** (Deployments, StatefulSets, ReplicaSets, ReplicationControllers) and **Restart** (Deployments,
   StatefulSets, DaemonSets; equivalent to `kubectl rollout restart`).
@@ -111,6 +113,11 @@ Click a row. Tabs: **Overview**, **Data** (ConfigMaps/Secrets only), **YAML**.
 ## Terminals
 
 Terminals live in the **dock** at the bottom (toggle with **⌃`**, resize by dragging its top edge, several tabs).
+
+The dock belongs to the **open cluster**: its tab bar starts with that cluster's name and colour and lists only that
+cluster's terminals, logs and apply tabs, so a shell can never be mistaken for another cluster's. Switching to another
+cluster hides these tabs without closing them; they are exactly as you left them when you come back (the hotbar icon
+shows a small counter while a cluster still has open tabs). Disconnecting or removing a cluster closes its tabs.
 
 - **Pod shell**: *Shell* in a pod's detail panel. Uses bash if present, otherwise sh. Containers without a shell
   (e.g. distroless images) report an error in the terminal.

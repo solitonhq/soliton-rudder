@@ -58,6 +58,47 @@ describe('Hotbar', () => {
     expect(screen.getByLabelText('Cluster Beta')).toBeTruthy() // connected, not pinned
   })
 
+  it('separates pinned clusters from open-but-unpinned ones with a divider, pinned first', () => {
+    // Beta is open but not pinned and sits between two pinned clusters in the saved order
+    useClusters.setState({
+      clusters: [cl('a', 'Alpha', true), cl('b', 'Beta', false), cl('c', 'Gamma', true)],
+      connected: { a: true, b: true, c: true },
+    })
+    render(<Hotbar />)
+    const names = screen.getAllByLabelText(/^Cluster /).map((b) => b.getAttribute('aria-label'))
+    expect(names).toEqual(['Cluster Alpha', 'Cluster Gamma', 'Cluster Beta'])
+    const divider = screen.getByRole('separator', { name: /not pinned/i })
+    const beta = screen.getByLabelText('Cluster Beta')
+    const gamma = screen.getByLabelText('Cluster Gamma')
+    // the divider sits between the last pinned and the first unpinned cluster
+    expect(gamma.compareDocumentPosition(divider) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(divider.compareDocumentPosition(beta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('draws no divider when everything shown is pinned, or nothing is', () => {
+    useClusters.setState({
+      clusters: [cl('a', 'Alpha', true), cl('c', 'Gamma', true)],
+      connected: { a: true },
+    })
+    const { unmount } = render(<Hotbar />)
+    expect(screen.queryByRole('separator', { name: /not pinned/i })).toBeNull()
+    unmount()
+    // only unpinned clusters open: no pinned group to separate from
+    useClusters.setState({ clusters: [cl('b', 'Beta', false)], connected: { b: true } })
+    render(<Hotbar />)
+    expect(screen.queryByRole('separator', { name: /not pinned/i })).toBeNull()
+  })
+
+  it('puts the active marker on the rail edge, not on the icon frame', () => {
+    useClusters.setState({ activeId: 'a' })
+    render(<Hotbar />)
+    const marker = screen.getByTestId('active-marker')
+    expect(marker.className).toContain('left-0')
+    // the list must span the whole rail, otherwise left-0 is the icon's edge and the marker overlaps its ring
+    const list = marker.parentElement!.parentElement!
+    expect(list.className).toContain('w-full')
+  })
+
   it('unpinning a connected cluster keeps it until it is disconnected', () => {
     useClusters.setState({ clusters: [cl('a', 'Alpha', false)], connected: { a: true } })
     const { unmount } = render(<Hotbar />)
@@ -87,8 +128,8 @@ describe('Hotbar', () => {
 
   it('marks the open cluster with a bar, not with the status ring', () => {
     useClusters.setState({ activeId: 'a' })
-    const { container } = render(<Hotbar />)
-    expect(container.querySelectorAll('span.bg-accent.rounded-r').length).toBe(1)
+    render(<Hotbar />)
+    expect(screen.getAllByTestId('active-marker')).toHaveLength(1)
     expect(ringOf('Alpha')).toContain('border-success')
   })
 

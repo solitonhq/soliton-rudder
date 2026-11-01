@@ -5,6 +5,16 @@ and the project uses [Semantic Versioning](https://semver.org/) (0.x: minor vers
 
 ## [Unreleased]
 
+### Fixed
+- **Terminals, logs and apply tabs no longer leak between clusters.** The dock is scoped to the open cluster: its tab bar
+  shows that cluster's name and colour and only its tabs; other clusters' tabs stay alive in the background and come back
+  as you left them, and the hotbar shows a counter for clusters that still have open tabs. Tabs close when their
+  cluster disconnects or is removed.
+- **Hotbar**: pinned clusters are now separated from clusters that are only open by a divider (pinned first), and the
+  bar that marks the open cluster sits on the rail's outer edge instead of overlapping the icon's status ring.
+- **Find in the YAML editor** works: **⌘F** and **Ctrl+F** both open it (on macOS Ctrl+F used to move the cursor), the
+  panel follows the app theme and sits on top, with **⌘G** / **F3** for next, **⇧F3** for previous and **Esc** to close.
+
 ## [0.1.0] - 2026-10-29
 
 First public release (pre-release): macOS only, unsigned build.

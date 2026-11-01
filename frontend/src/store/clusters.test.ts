@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useClusters } from './clusters'
+import { useDock } from './dock'
 import { useUI } from './ui'
 
 let App: Record<string, ReturnType<typeof vi.fn>>
@@ -20,6 +21,21 @@ describe('connection state', () => {
   it('setConnected replaces the whole set', () => {
     useClusters.getState().setConnected(['b', 'c'])
     expect(useClusters.getState().connected).toEqual({ b: true, c: true })
+  })
+
+  it('closes the dock tabs of a cluster whose connection went away, and only those', () => {
+    useDock.setState({ tabs: [], activeId: null, lastActive: {}, expanded: false })
+    useDock.getState().openTab({ kind: 'terminal', clusterId: 'a', title: 'a-shell' })
+    useDock.getState().openTab({ kind: 'terminal', clusterId: 'b', title: 'b-shell' })
+    useClusters.getState().setConnected(['b']) // a disconnected
+    expect(useDock.getState().tabs.map((t) => t.title)).toEqual(['b-shell'])
+  })
+
+  it('keeps the dock tabs while a cluster stays connected', () => {
+    useDock.setState({ tabs: [], activeId: null, lastActive: {}, expanded: false })
+    useDock.getState().openTab({ kind: 'terminal', clusterId: 'a', title: 'a-shell' })
+    useClusters.getState().setConnected(['a', 'b'])
+    expect(useDock.getState().tabs).toHaveLength(1)
   })
 
   it('disconnecting the open cluster returns to Home before closing it', async () => {

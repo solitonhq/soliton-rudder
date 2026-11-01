@@ -18,7 +18,12 @@ export function YamlEditor({
       height="100%"
       theme="none"
       extensions={yamlExtensions}
-      basicSetup={{ foldGutter: true, highlightActiveLine: !readOnly, autocompletion: false }}
+      basicSetup={{
+        foldGutter: true,
+        highlightActiveLine: !readOnly,
+        autocompletion: false,
+        searchKeymap: false, // replaced by searchExtensions in lib/cm.ts
+      }}
       className="h-full"
     />
   )

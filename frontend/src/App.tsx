@@ -10,7 +10,7 @@ import { startNavigation } from './store/nav'
 import { startForwardEvents } from './store/forwards'
 import { startPluginEvents } from './store/plugins'
 import { startReportEvents } from './store/reports'
-import { useDock } from './store/dock'
+import { tabsOf, useDock } from './store/dock'
 import { startUpdateEvents, useSettings } from './store/settings'
 import { useUI } from './store/ui'
 import { AccessDialog } from './dialogs/AccessDialog'
@@ -46,7 +46,7 @@ export default function App() {
       if (e.ctrlKey && e.key === '`') {
         e.preventDefault()
         const d = useDock.getState()
-        if (d.tabs.length) d.setExpanded(!d.expanded)
+        if (tabsOf(d.tabs, useClusters.getState().activeId).length) d.setExpanded(!d.expanded)
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()

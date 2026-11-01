@@ -11,7 +11,7 @@ import {
 import { PluginFrame } from './PluginFrame'
 import { lazy, Suspense, useRef } from 'react'
 import { useClusters } from '../store/clusters'
-import { useDock, type DockTab } from '../store/dock'
+import { currentTabId, tabsOf, useDock, type DockTab } from '../store/dock'
 
 const TerminalTab = lazy(() => import('./TerminalTab').then((m) => ({ default: m.TerminalTab })))
 const LogsTabView = lazy(() => import('./LogsTab').then((m) => ({ default: m.LogsTabView })))
@@ -30,12 +30,19 @@ const icon = (t: DockTab) =>
 
 /** Bottom dock hosting terminals, log viewers and manifest apply tabs. Tabs stay mounted to keep state. */
 export function Dock() {
-  const { tabs, activeId, expanded, height, setActive, closeTab, setExpanded, setHeight } =
+  const { tabs, lastActive, expanded, height, setActive, closeTab, setExpanded, setHeight } =
     useDock()
   const clusters = useClusters((s) => s.clusters)
+  const clusterId = useClusters((s) => s.activeId)
   const drag = useRef<{ y: number; h: number } | null>(null)
 
   if (tabs.length === 0) return null
+
+  // The dock shows the open cluster's tabs only. Other clusters' tabs stay mounted (hidden) so their shells and
+  // log streams keep running and are exactly as left when you switch back.
+  const visible = tabsOf(tabs, clusterId)
+  const activeId = currentTabId({ tabs, lastActive }, clusterId)
+  const owner = clusters.find((x) => x.id === clusterId)
 
   const onDown = (e: React.PointerEvent) => {
     drag.current = { y: e.clientY, h: height }
@@ -47,8 +54,12 @@ export function Dock() {
 
   return (
     <section
-      className="flex shrink-0 flex-col border-t border-border bg-surface"
+      className={clsx(
+        'flex shrink-0 flex-col border-t border-border bg-surface',
+        visible.length === 0 && 'hidden',
+      )}
       style={{ height: expanded ? height : 34 }}
+      aria-label={owner ? `Terminals and logs for ${owner.name}` : 'Terminals and logs'}
     >
       {expanded && (
         <div
@@ -59,8 +70,17 @@ export function Dock() {
         />
       )}
       <div className="flex h-[33px] shrink-0 items-center border-b border-border pr-2">
+        {owner && (
+          <span
+            className="flex h-[33px] shrink-0 items-center gap-1.5 border-r border-border px-3 text-xs font-medium"
+            title={`These tabs belong to ${owner.name} (${owner.context})`}
+          >
+            <span className="size-2 rounded-full" style={{ background: owner.color }} />
+            <span className="max-w-32 truncate">{owner.name}</span>
+          </span>
+        )}
         <div className="flex min-w-0 flex-1 overflow-x-auto">
-          {tabs.map((t) => {
+          {visible.map((t) => {
             const c = clusters.find((x) => x.id === t.clusterId)
             return (
               <div
@@ -106,7 +126,11 @@ export function Dock() {
         {tabs.map((t) => {
           const active = t.id === activeId && expanded
           return (
-            <div key={t.id} className={clsx('h-full', t.id !== activeId && 'hidden')}>
+            <div
+              key={t.id}
+              className={clsx('h-full', t.id !== activeId && 'hidden')}
+              data-cluster={t.clusterId}
+            >
               {t.kind === 'terminal' && <TerminalTab tab={t} active={active} />}
               {t.kind === 'logs' && <LogsTabView tab={t} active={active} />}
               {t.kind === 'plugin' && (

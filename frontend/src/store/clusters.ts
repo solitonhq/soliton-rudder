@@ -42,7 +42,13 @@ export const useClusters = create<ClusterState>((set, get) => ({
 
   setActive: (activeId) => set({ activeId }),
 
-  setConnected: (ids) => set({ connected: Object.fromEntries(ids.map((i) => [i, true])) }),
+  setConnected(ids) {
+    const next = Object.fromEntries(ids.map((i) => [i, true]))
+    // a shell or log stream belongs to its connection: when the cluster disconnects, its tabs go too
+    for (const id of Object.keys(get().connected))
+      if (!next[id]) useDock.getState().closeCluster(id)
+    set({ connected: next })
+  },
 
   async connect(id) {
     try {

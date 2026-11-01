@@ -27,7 +27,7 @@ jobs:
       - run: npm ci && npm run build
         working-directory: frontend
       # fails when vulnerable code is actually reachable from this program
-      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 . ./cmd/... ./internal/...
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 . ./cmd/... ./internal/...
 
   npm-audit:
     name: npm audit (frontend)
