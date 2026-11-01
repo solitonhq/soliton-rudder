@@ -26,3 +26,4 @@ frontend/wailsjs/
 
 # a `go build .` in the repo root writes the binary here
 /soliton-rudder
+frontend/package.json.md5

@@ -275,9 +275,12 @@ func runProbe(ctx context.Context, addr string, req ProbeRequest) ProbeResult {
 		}
 		hreq.Header.Set(h.Name, h.Value)
 	}
+	// Verification is off on purpose: this reproduces what the kubelet does for an
+	// httpGet probe (it never verifies the pod's certificate), and the target is a
+	// pod address the user picked. Only the status and a capped body are read.
 	client := &http.Client{
 		Timeout:       8 * time.Second,
-		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DisableKeepAlives: true}, // like the kubelet
+		Transport:     &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, DisableKeepAlives: true},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
 	resp, err := client.Do(hreq)

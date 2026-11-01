@@ -67,7 +67,42 @@ func Newer(current, latest string) bool {
 	return ok1 && ok2 && less(c, l)
 }
 
-// Check queries <apiBase>/repos/<repo>/releases/latest (apiBase "" = GitHub).
+type release struct {
+	Tag        string `json:"tag_name"`
+	URL        string `json:"html_url"`
+	Body       string `json:"body"`
+	Published  string `json:"published_at"`
+	Draft      bool   `json:"draft"`
+	Prerelease bool   `json:"prerelease"`
+}
+
+// pick returns the newest published release. Pre-releases only count while no stable
+// release exists, so a stable install is never offered a pre-release.
+func pick(rels []release) (release, bool) {
+	stable := false
+	for _, r := range rels {
+		if !r.Draft && !r.Prerelease {
+			stable = true
+		}
+	}
+	var best release
+	found := false
+	for _, r := range rels {
+		if r.Draft || (stable && r.Prerelease) {
+			continue
+		}
+		if _, ok := parse(r.Tag); !ok {
+			continue
+		}
+		if !found || Newer(best.Tag, r.Tag) {
+			best, found = r, true
+		}
+	}
+	return best, found
+}
+
+// Check queries <apiBase>/repos/<repo>/releases (apiBase "" = GitHub). It lists releases rather
+// than asking for /releases/latest, because GitHub answers 404 to that while only pre-releases exist.
 func Check(ctx context.Context, apiBase, repo, current string) (Result, error) {
 	if apiBase == "" {
 		apiBase = "https://api.github.com"
@@ -77,7 +112,7 @@ func Check(ctx context.Context, apiBase, repo, current string) (Result, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/repos/"+repo+"/releases/latest", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiBase+"/repos/"+repo+"/releases?per_page=30", nil)
 	if err != nil {
 		return Result{}, err
 	}
@@ -94,18 +129,12 @@ func Check(ctx context.Context, apiBase, repo, current string) (Result, error) {
 	case resp.StatusCode != http.StatusOK:
 		return Result{}, fmt.Errorf("GitHub returned %s", resp.Status)
 	}
-	var rel struct {
-		Tag        string `json:"tag_name"`
-		URL        string `json:"html_url"`
-		Body       string `json:"body"`
-		Published  string `json:"published_at"`
-		Draft      bool   `json:"draft"`
-		Prerelease bool   `json:"prerelease"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 2<<20)).Decode(&rel); err != nil {
+	var rels []release
+	if err := json.NewDecoder(http.MaxBytesReader(nil, resp.Body, 8<<20)).Decode(&rels); err != nil {
 		return Result{}, fmt.Errorf("unexpected response from GitHub: %w", err)
 	}
-	if rel.Draft || rel.Prerelease {
+	rel, ok := pick(rels)
+	if !ok {
 		return Result{Current: current, Latest: current}, nil
 	}
 	notes := rel.Body

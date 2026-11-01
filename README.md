@@ -53,7 +53,7 @@ with watches so everything you see is live.
 
 ## Install
 
-Download the DMG from the [latest release](https://github.com/solitonhq/soliton-rudder/releases/latest), drag
+Download the DMG from the [latest release](https://github.com/solitonhq/soliton-rudder/releases), drag
 **Soliton Rudder** to **Applications**, and open it. Full instructions (including Gatekeeper, Keychain prompts, cloud
 auth, updating and uninstalling) are in **[docs/INSTALL.md](docs/INSTALL.md)**.
 

@@ -29,7 +29,7 @@ func TestNewer(t *testing.T) {
 
 func fake(t *testing.T, status int, body string) string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/repos/acme/rudder/releases/latest") {
+		if !strings.HasSuffix(r.URL.Path, "/repos/acme/rudder/releases") {
 			t.Errorf("unexpected path %s", r.URL.Path)
 		}
 		if r.Header.Get("User-Agent") == "" {
@@ -43,7 +43,7 @@ func fake(t *testing.T, status int, body string) string {
 }
 
 func TestCheck(t *testing.T) {
-	base := fake(t, 200, `{"tag_name":"v0.3.0","html_url":"https://github.com/acme/rudder/releases/tag/v0.3.0","body":"notes","published_at":"2026-01-01T00:00:00Z"}`)
+	base := fake(t, 200, `[{"tag_name":"v0.3.0","html_url":"https://github.com/acme/rudder/releases/tag/v0.3.0","body":"notes","published_at":"2026-01-01T00:00:00Z"}]`)
 	r, err := Check(context.Background(), base, "acme/rudder", "0.2.0")
 	if err != nil || !r.Available || r.Latest != "0.3.0" || r.Notes != "notes" {
 		t.Fatalf("%v %+v", err, r)
@@ -58,8 +58,16 @@ func TestCheckEdgeCases(t *testing.T) {
 	if r, err := Check(context.Background(), fake(t, 404, `{}`), "acme/rudder", "0.1.0"); err != nil || r.Available {
 		t.Fatalf("no release yet must be quiet: %v %+v", err, r)
 	}
-	if r, _ := Check(context.Background(), fake(t, 200, `{"tag_name":"v9.0.0","prerelease":true}`), "acme/rudder", "0.1.0"); r.Available {
-		t.Fatal("pre-releases are ignored")
+	pre := `[{"tag_name":"v0.2.0","prerelease":true},{"tag_name":"v0.3.0","prerelease":true},{"tag_name":"v0.4.0","draft":true}]`
+	if r, _ := Check(context.Background(), fake(t, 200, pre), "acme/rudder", "0.2.0"); !r.Available || r.Latest != "0.3.0" {
+		t.Fatalf("with only pre-releases published, the newest one must be offered (drafts never): %+v", r)
+	}
+	mixed := `[{"tag_name":"v2.0.0-rc1","prerelease":true},{"tag_name":"v1.0.0"}]`
+	if r, _ := Check(context.Background(), fake(t, 200, mixed), "acme/rudder", "1.0.0"); r.Available {
+		t.Fatalf("a stable install is not offered a pre-release: %+v", r)
+	}
+	if r, _ := Check(context.Background(), fake(t, 200, `[]`), "acme/rudder", "0.1.0"); r.Available {
+		t.Fatal("an empty list is quiet")
 	}
 	if _, err := Check(context.Background(), fake(t, 500, `{}`), "acme/rudder", "0.1.0"); err == nil {
 		t.Fatal("server errors surface")

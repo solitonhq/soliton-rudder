@@ -7,13 +7,15 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write
-  id-token: write       # build provenance attestation
-  attestations: write
+  contents: read
 
 jobs:
   dmg:
     runs-on: macos-latest
+    permissions:
+      contents: write       # publish the GitHub Release
+      id-token: write       # build provenance attestation
+      attestations: write
     timeout-minutes: 60
     env:
       # `secrets` can't be read in step-level `if`, so expose "is it set?" as job-level booleans

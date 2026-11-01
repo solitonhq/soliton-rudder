@@ -59,7 +59,7 @@ when you click reveal/copy and are held in memory only while shown.
 | Destination | When | Why |
 |---|---|---|
 | Kubernetes API servers (via your kubeconfig, including its proxy settings) | While using a cluster | Everything the app does |
-| `api.github.com` (`/repos/<owner>/<repo>/releases/latest`) | Once a day at most, only if enabled in *Settings → General* | Tells you a newer version exists. Sends no identifying data (GitHub sees your IP). Never downloads or installs anything. |
+| `api.github.com` (`/repos/<owner>/<repo>/releases`) | Once a day at most, only if enabled in *Settings → General* | Tells you a newer version exists. Sends no identifying data (GitHub sees your IP). Never downloads or installs anything. |
 | URLs you type into *Apply → From URL* | On click | Fetches the manifest (http/https, ≤ 5 MB) |
 | Prometheus (through the API server proxy) | When you use it | Queries |
 | Anything a **plugin** requests | Only if you granted it `network` | See below |

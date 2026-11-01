@@ -190,7 +190,7 @@ describe('Applications list', () => {
     render(<Applications clusterId="c1" />)
     fireEvent.click(await screen.findByText('Not part of any application'))
     expect(screen.getByText('ops/lonely')).toBeTruthy()
-    expect(screen.getByText(/app.kubernetes.io\/part-of/)).toBeTruthy()
+    expect(screen.getByText(/app\.kubernetes\.io\/part-of/)).toBeTruthy()
   })
 
   it('explains an empty result and a failed read', async () => {

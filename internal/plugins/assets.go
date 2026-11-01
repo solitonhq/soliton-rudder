@@ -105,11 +105,11 @@ func (m *Manager) AssetHandler() http.Handler {
 		}
 		clean := path.Clean("/" + file)
 		full := filepath.Join(root, filepath.FromSlash(clean))
-		if rel, err := filepath.Rel(root, full); err != nil || strings.HasPrefix(rel, "..") {
+		if !strings.HasPrefix(full, filepath.Clean(root)+string(filepath.Separator)) {
 			http.NotFound(w, r)
 			return
 		}
-		st, err := os.Stat(full)
+		st, err := os.Lstat(full) // Lstat: a symlink inside a plugin must not be followed out of its folder
 		if err != nil || st.IsDir() || st.Mode()&os.ModeSymlink != 0 {
 			http.NotFound(w, r)
 			return

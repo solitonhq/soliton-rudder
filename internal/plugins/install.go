@@ -86,6 +86,9 @@ func extractZip(zipPath, dst string) error {
 			return fmt.Errorf("zip entry %q escapes the archive", f.Name)
 		}
 		target := filepath.Join(dst, name)
+		if !strings.HasPrefix(target, filepath.Clean(dst)+string(filepath.Separator)) {
+			return fmt.Errorf("zip entry %q escapes the archive", f.Name)
+		}
 		if f.Mode()&os.ModeSymlink != 0 {
 			continue
 		}
