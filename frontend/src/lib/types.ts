@@ -1063,3 +1063,47 @@ export interface AppLinkTemplate {
   title: string
   url: string
 }
+
+/** What a pod's containers read from the cluster. Secret and ConfigMap values are never part of it. */
+export interface EnvVar {
+  name: string
+  source: 'literal' | 'secret' | 'configmap' | 'field' | 'resource'
+  value: string
+  ref: string
+  key: string
+  optional: boolean
+  detail: string
+}
+export interface EnvFromRef {
+  kind: 'secret' | 'configmap'
+  name: string
+  prefix: string
+  optional: boolean
+}
+export interface VolumeMount {
+  volume: string
+  path: string
+  readOnly: boolean
+  subPath: string
+}
+export interface ContainerEnv {
+  name: string
+  init: boolean
+  env: EnvVar[]
+  envFrom: EnvFromRef[]
+  mounts: VolumeMount[]
+}
+export interface VolumeSource {
+  kind: string
+  name: string
+}
+export interface PodVolume {
+  name: string
+  kind: string
+  ref: string
+  sources: VolumeSource[]
+}
+export interface PodEnv {
+  containers: ContainerEnv[]
+  volumes: PodVolume[]
+}

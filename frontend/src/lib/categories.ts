@@ -118,6 +118,29 @@ export function categorize(resources: Resource[]): Category[] {
   return out
 }
 
+const words = (kind: string) => kind.replace(/([a-z])([A-Z])/g, '$1 $2').split(' ')
+const capital = (w: string) => w.charAt(0).toUpperCase() + w.slice(1)
+
+/** English plural of a single word, for kinds whose API plural does not line up with their name. */
+function pluralize(w: string): string {
+  const lower = w.toLowerCase()
+  if (lower.endsWith('s') && !/(ss|us)$/.test(lower)) return w // already plural: Endpoints
+  if (/(s|x|z|ch|sh)$/.test(lower)) return w + 'es'
+  if (/[^aeiou]y$/.test(lower)) return w.slice(0, -1) + 'ies'
+  return w + 's'
+}
+
+/**
+ * The plural display name of a kind ("Ingresses", "Network Policies", "Ingress Classes"). The API already knows the
+ * plural (`networkpolicies`), so it is taken from there; only when that does not line up with the kind is it guessed.
+ */
 export function resourceTitle(r: Resource): string {
-  return r.kind.replace(/([a-z])([A-Z])/g, '$1 $2') + 's'
+  const w = words(r.kind)
+  const prefix = w.slice(0, -1).join('').toLowerCase()
+  const name = r.name.toLowerCase()
+  const last = w[w.length - 1]!.toLowerCase()
+  const rest = name.startsWith(prefix) ? name.slice(prefix.length) : ''
+  // the API's plural is trusted only when it is recognisably the plural of this kind's last word
+  const lastPlural = rest.slice(0, 3) === last.slice(0, 3) ? rest : pluralize(last).toLowerCase()
+  return [...w.slice(0, -1), capital(lastPlural)].join(' ')
 }

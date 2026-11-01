@@ -12,7 +12,7 @@
   "info": {
     "companyName": "Soliton Rudder contributors",
     "productName": "Soliton Rudder",
-    "productVersion": "0.1.0",
+    "productVersion": "0.2.0",
     "copyright": "Copyright \u00a9 Soliton Rudder contributors. Licensed under the Apache License 2.0.",
     "comments": "Kubernetes management, simplified."
   }

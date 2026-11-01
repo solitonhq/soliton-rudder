@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import clsx from 'clsx'
-import { ArrowDown, ArrowUp, Cable } from 'lucide-react'
+import { ArrowDown, ArrowUp, Cable, RotateCw, Scaling } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   cellText,
@@ -10,19 +10,126 @@ import {
   statusTone,
   type Tone,
 } from '../lib/format'
-import { openURL } from '../lib/backend'
+import { kube, openURL } from '../lib/backend'
 import { FORWARD_KIND, FORWARDABLE, quickForward } from '../lib/quickforward'
+import {
+  applyWidths,
+  clampWidth,
+  loadWidths,
+  MAX_COL,
+  MIN_COL,
+  saveWidths,
+  type Widths,
+} from '../lib/colwidths'
 import { computeRows, moveSelection, usageKey } from '../lib/tablerows'
+import { desiredReplicas, RESTARTABLE, SCALABLE } from '../lib/workloads'
 import type { Column, Row } from '../lib/types'
 import { formatBytes, formatCPU } from '../lib/units'
 import { useRowStoreVersion } from '../lib/useRowStore'
 import { useExplorer, type RowRef } from '../store/explorer'
 import { ForwardDialog, type ForwardTargetProps } from '../dialogs/ForwardDialog'
+import { RestartDialog } from '../dialogs/RestartDialog'
+import { ScaleDialog } from '../dialogs/ScaleDialog'
 import { useUI } from '../store/ui'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { IngressCell } from './IngressDetails'
 
 const ROW_H = 30
+
+const STEP = 16
+
+/**
+ * The drag handle on a column's right edge. Drag with the mouse; with the keyboard focus it and use ←/→ (Shift for
+ * bigger steps); double-click or Enter puts the column back to its automatic width.
+ */
+function ResizeHandle({
+  label,
+  width,
+  onResize,
+  onCommit,
+  onReset,
+}: {
+  label: string
+  width: number
+  onResize: (w: number) => void
+  onCommit: (w: number) => void
+  onReset: () => void
+}) {
+  const drag = useRef<{ x: number; w: number; last: number } | null>(null)
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize ${label} column`}
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={MIN_COL}
+      aria-valuemax={MAX_COL}
+      tabIndex={0}
+      title="Drag to resize · double-click to reset"
+      onClick={(e) => e.stopPropagation()} // do not sort
+      onDoubleClick={onReset}
+      onPointerDown={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+        drag.current = { x: e.clientX, w: width, last: width }
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current
+        if (!d) return
+        d.last = clampWidth(d.w + e.clientX - d.x)
+        onResize(d.last)
+      }}
+      onPointerUp={() => {
+        const d = drag.current
+        drag.current = null
+        if (d && d.last !== d.w) onCommit(d.last)
+      }}
+      onKeyDown={(e) => {
+        const step = (e.shiftKey ? 4 : 1) * STEP
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault()
+          e.stopPropagation()
+          onCommit(clampWidth(width + (e.key === 'ArrowRight' ? step : -step)))
+        } else if (e.key === 'Enter') {
+          e.preventDefault()
+          e.stopPropagation()
+          onReset()
+        }
+      }}
+      className="absolute right-0 top-0 z-10 flex h-full w-2 cursor-col-resize touch-none items-center justify-center outline-none after:h-4 after:w-px after:bg-border hover:after:bg-accent focus-visible:after:w-0.5 focus-visible:after:bg-accent"
+    />
+  )
+}
+
+/** Width of the hover actions, so they sit at the right edge of the name column. */
+const actionsWidth = (...on: boolean[]) => on.filter(Boolean).length * 28 + 8
+
+function RowButton({
+  label,
+  title,
+  onClick,
+  children,
+}: {
+  label: string
+  title: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation() // act on the row without also selecting it
+        onClick()
+      }}
+      title={title}
+      aria-label={label}
+      className="grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-surface text-muted hover:border-accent hover:text-accent focus-visible:opacity-100"
+    >
+      {children}
+    </button>
+  )
+}
 
 interface DisplayCol {
   id: string
@@ -67,6 +174,19 @@ export function ResourceTable({
   const toast = useUI((s) => s.toast)
   const canForward = FORWARDABLE.has(resourceName) && !!clusterId && !!selectedKey
   const [fwdDialog, setFwdDialog] = useState<ForwardTargetProps | null>(null)
+  const canScale = SCALABLE.has(resourceName) && !!clusterId && !!selectedKey
+  const canRestart = RESTARTABLE.has(resourceName) && !!clusterId && !!selectedKey
+  const [scaleDlg, setScaleDlg] = useState<Row | null>(null)
+  const [restartDlg, setRestartDlg] = useState<Row | null>(null)
+
+  const act = async (ok: string, fn: () => Promise<void>) => {
+    try {
+      await fn()
+      toast('success', ok)
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : String(e))
+    }
+  }
 
   /** One click: free local port, reuse an existing identical forward; asks only when several ports exist. */
   const forwardRow = async (r: Row) => {
@@ -142,6 +262,19 @@ export function ResourceTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [columns, wide, showNs, hasRows, hasUsage])
 
+  // User-set widths (per resource kind). Only the layout depends on them, so sorting and filtering do not.
+  const [widths, setWidths] = useState<Widths>(() => loadWidths(resourceName))
+  const shownCols = useMemo(() => applyWidths(cols, widths), [cols, widths])
+  const commitWidths = (next: Widths) => {
+    setWidths(next)
+    saveWidths(resourceName, next)
+  }
+  const resetWidth = (id: string) => {
+    const rest = { ...widths }
+    delete rest[id]
+    commitWidths(rest)
+  }
+
   const rows = useMemo(
     () => computeRows(main.rows, { namespaced, namespaces, search, sort, cols, usage, isNode }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` signals in-place mutation of main.rows
@@ -168,8 +301,8 @@ export function ResourceTable({
     }
   }
 
-  const totalW = cols.reduce((n, c) => n + c.width, 0)
-  const grid = cols.map((c) => `${c.width}px`).join(' ')
+  const totalW = shownCols.reduce((n, c) => n + c.width, 0)
+  const grid = shownCols.map((c) => `${c.width}px`).join(' ')
 
   const renderCell = (r: Row, c: DisplayCol, i: number) => {
     if (c.index === -3 || c.index === -4) {
@@ -237,23 +370,48 @@ export function ResourceTable({
       aria-label="Resources"
       aria-rowcount={rows.length}
       onKeyDown={onKeyDown}
+      // empty space below or beside the rows closes the open detail panel (asks first if it has unsaved edits)
+      onClick={(e) => {
+        if (e.target === e.currentTarget && selected) setSelected(null)
+      }}
     >
       <div style={{ width: Math.max(totalW, 0), minWidth: '100%' }}>
         <div
           className="sticky top-0 z-10 grid border-b border-border bg-surface text-[11px] font-semibold uppercase tracking-wide text-muted"
           style={{ gridTemplateColumns: grid, height: 30 }}
+          onContextMenu={(e) => {
+            e.preventDefault()
+            setMenu({
+              x: e.clientX,
+              y: e.clientY,
+              items: [
+                {
+                  label: 'Reset column widths',
+                  onClick: () => commitWidths({}),
+                },
+              ],
+            })
+          }}
         >
-          {cols.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => toggleSort(c.id)}
-              aria-label={`Sort by ${c.label}`}
-              className="flex cursor-pointer items-center gap-1 truncate px-3 text-left uppercase hover:text-fg"
-            >
-              <span className="truncate">{c.label}</span>
-              {sort?.col === c.id &&
-                (sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
-            </button>
+          {shownCols.map((c) => (
+            <div key={c.id} className="relative min-w-0">
+              <button
+                onClick={() => toggleSort(c.id)}
+                aria-label={`Sort by ${c.label}`}
+                className="flex size-full cursor-pointer items-center gap-1 truncate px-3 text-left uppercase hover:text-fg"
+              >
+                <span className="truncate">{c.label}</span>
+                {sort?.col === c.id &&
+                  (sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+              </button>
+              <ResizeHandle
+                label={c.label}
+                width={c.width}
+                onResize={(w) => setWidths((cur) => ({ ...cur, [c.id]: w }))}
+                onCommit={(w) => commitWidths({ ...widths, [c.id]: w })}
+                onReset={() => resetWidth(c.id)}
+              />
+            </div>
           ))}
         </div>
         <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
@@ -278,6 +436,10 @@ export function ResourceTable({
                       ...(canForward
                         ? [{ label: 'Forward (auto port)', onClick: () => void forwardRow(r) }]
                         : []),
+                      ...(canScale ? [{ label: 'Scale…', onClick: () => setScaleDlg(r) }] : []),
+                      ...(canRestart
+                        ? [{ label: 'Restart…', onClick: () => setRestartDlg(r) }]
+                        : []),
                       { label: 'Edit YAML', onClick: () => onAction('edit', ref) },
                       {
                         label: 'Copy name',
@@ -299,24 +461,50 @@ export function ResourceTable({
                   width: '100%',
                 }}
               >
-                {cols.map((c, i) => (
+                {shownCols.map((c, i) => (
                   <div key={c.id} className="truncate px-3">
                     {renderCell(r, c, i)}
                   </div>
                 ))}
-                {canForward && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation() // forward without also selecting the row
-                      void forwardRow(r)
+                {(canForward || canScale || canRestart) && (
+                  <div
+                    style={{
+                      left: Math.max(
+                        0,
+                        (shownCols[0]?.width ?? 200) -
+                          actionsWidth(canForward, canScale, canRestart),
+                      ),
                     }}
-                    title="Forward: one click, free local port"
-                    aria-label={`Forward ${r.name}`}
-                    style={{ left: Math.max(0, (cols[0]?.width ?? 200) - 30) }}
-                    className="absolute top-1/2 grid size-6 -translate-y-1/2 cursor-pointer place-items-center rounded-md border border-border bg-surface text-muted opacity-0 hover:border-accent hover:text-accent focus-visible:opacity-100 group-hover:opacity-100"
+                    className="absolute top-1/2 flex -translate-y-1/2 gap-1 rounded-md bg-surface p-0.5 opacity-0 focus-within:opacity-100 group-hover:opacity-100"
                   >
-                    <Cable size={13} />
-                  </button>
+                    {canForward && (
+                      <RowButton
+                        label={`Forward ${r.name}`}
+                        title="Forward: one click, free local port"
+                        onClick={() => void forwardRow(r)}
+                      >
+                        <Cable size={13} />
+                      </RowButton>
+                    )}
+                    {canScale && (
+                      <RowButton
+                        label={`Scale ${r.name}`}
+                        title="Scale"
+                        onClick={() => setScaleDlg(r)}
+                      >
+                        <Scaling size={13} />
+                      </RowButton>
+                    )}
+                    {canRestart && (
+                      <RowButton
+                        label={`Restart ${r.name}`}
+                        title="Rolling restart"
+                        onClick={() => setRestartDlg(r)}
+                      >
+                        <RotateCw size={13} />
+                      </RowButton>
+                    )}
+                  </div>
                 )}
               </div>
             )
@@ -334,6 +522,30 @@ export function ResourceTable({
       </div>
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
       {fwdDialog && <ForwardDialog {...fwdDialog} onClose={() => setFwdDialog(null)} />}
+      {scaleDlg && clusterId && selectedKey && (
+        <ScaleDialog
+          name={scaleDlg.name}
+          initial={desiredReplicas(scaleDlg.cells)}
+          onClose={() => setScaleDlg(null)}
+          onScale={(n) =>
+            act(`Scaled ${scaleDlg.name} to ${n}`, () =>
+              kube.scale(clusterId, selectedKey, scaleDlg.ns, scaleDlg.name, n),
+            )
+          }
+        />
+      )}
+      {restartDlg && clusterId && selectedKey && (
+        <RestartDialog
+          name={restartDlg.name}
+          kind={resourceName.replace(/s$/, '')}
+          onClose={() => setRestartDlg(null)}
+          onRestart={() =>
+            act(`Restart of ${restartDlg.name} triggered`, () =>
+              kube.restart(clusterId, selectedKey, restartDlg.ns, restartDlg.name),
+            )
+          }
+        />
+      )}
     </div>
   )
 }

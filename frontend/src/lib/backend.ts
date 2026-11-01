@@ -55,6 +55,7 @@ import type {
   Topology,
   MetricsSeries,
   ObjectMeta,
+  PodEnv,
   PluginInfo,
   PluginInspection,
   PortInfo,
@@ -125,6 +126,8 @@ type Bindings = {
   RestartResource(c: string, key: string, ns: string, name: string): Promise<void>
   GetResourceEvents(c: string, key: string, ns: string, name: string): Promise<KubeEvent[]>
   GetResourceMeta(c: string, key: string, ns: string, name: string): Promise<ObjectMeta>
+  GetPodEnvironment(c: string, ns: string, name: string): Promise<PodEnv>
+  GetRefValue(c: string, ns: string, kind: string, name: string, key: string): Promise<string>
   OpenPodTerminal(
     c: string,
     ns: string,
@@ -394,6 +397,22 @@ export const kube = {
     callOrFail((b) => b.GetResourceEvents(c, key, ns, name)),
   meta: (c: string, key: string, ns: string, name: string) =>
     callOrFail((b) => b.GetResourceMeta(c, key, ns, name)),
+  podEnv: async (c: string, ns: string, name: string): Promise<PodEnv> => {
+    const e = await callOrFail((b) => b.GetPodEnvironment(c, ns, name))
+    // the UI maps these arrays directly: never let a null through
+    return {
+      containers: (e?.containers ?? []).map((k) => ({
+        ...k,
+        env: k.env ?? [],
+        envFrom: k.envFrom ?? [],
+        mounts: k.mounts ?? [],
+      })),
+      volumes: (e?.volumes ?? []).map((v) => ({ ...v, sources: v.sources ?? [] })),
+    }
+  },
+  /** One Secret or ConfigMap key, fetched only when the user asks to see it. */
+  refValue: (c: string, ns: string, kind: 'secret' | 'configmap', name: string, key: string) =>
+    callOrFail((b) => b.GetRefValue(c, ns, kind, name, key)),
 }
 
 export const tools = {

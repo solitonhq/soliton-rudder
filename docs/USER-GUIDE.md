@@ -77,11 +77,12 @@ columns. The choice is remembered.
 - **Namespaces**: pick one or several, or *All*. Your choice is remembered per cluster.
 - **Search** filters across all visible columns. **Sort** by clicking a header (click again to reverse, a third
   time to clear). **Wide** toggles extra columns the API marks as secondary.
-- Status columns are colour-coded; **Age** ticks live. Right-click a row for *Edit YAML*, *Copy name*, *Delete…*.
+- **Column widths**: drag the right edge of a header to resize it, double-click (or press Enter on the focused edge) to put it back to its automatic width; with the keyboard, focus the edge and use ←/→ (hold ⇧ for bigger steps). Right-click a header → *Reset column widths*. Widths are remembered per resource kind.
+- Status columns are colour-coded; **Age** ticks live. Right-click a row for *Scale…* / *Restart…* (workloads), *Edit YAML*, *Copy name*, *Delete…*. Hovering a Deployment, StatefulSet or DaemonSet row shows one-click **Scale** and **Restart** buttons (and **Forward** where it applies) so you do not have to open the detail panel; Scale is prefilled with the current replica count and Restart asks for confirmation.
 
 ## The detail panel
 
-Click a row. Tabs: **Overview**, **Data** (ConfigMaps/Secrets only), **YAML**.
+Click a row. Tabs: **Overview**, **Events**, **Data** (ConfigMaps/Secrets only), **YAML**. Close the panel with **✕**, **Esc**, or by clicking the empty space of the table; if the YAML tab has unsaved edits you are asked before they are discarded (also when you pick another object).
 
 **Overview** shows:
 
@@ -104,6 +105,17 @@ Click a row. Tabs: **Overview**, **Data** (ConfigMaps/Secrets only), **YAML**.
 
 ## Editing, scaling, restarting, deleting
 
+- **Events tab**: everything the cluster recorded about the object, newest first, refreshed every 10 s, with an
+  **All / Warnings** filter. For workloads (Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob) it includes
+  the events of what they own, found through ownerReferences (ReplicaSets, Jobs, Pods), including pods that were
+  already replaced, so a rollout that keeps failing is visible from the Deployment. Similarly named workloads are not
+  mixed up (`web` does not pick up `web-api`). A badge on the tab counts warnings, and the Overview shows a one-event
+  teaser with **View all**.
+- **Environment & mounts** (pods, on the Overview): every container's environment variables and where they come from
+  (literal, Secret key, ConfigMap key, pod field, resource limit), `envFrom` sources and the volumes and mounts. **Secret
+  and ConfigMap values are not loaded until you press Show** for one key; the value is hidden again after 30 seconds
+  (or press Hide), can be copied, and is never logged. If you may not read the Secret, the reason is shown. A reference
+  opens the Secret or ConfigMap list filtered to that name.
 - **YAML tab**: edit, then **Save**. **⌘F** / **Ctrl+F** opens find (**⌘G** / **F3** next, **⇧F3** previous, **Esc** closes). It performs an update with optimistic concurrency, so a conflicting change
   made elsewhere is reported instead of overwritten. `managedFields` are hidden to keep the text readable.
 - **Scale** (Deployments, StatefulSets, ReplicaSets, ReplicationControllers) and **Restart** (Deployments,

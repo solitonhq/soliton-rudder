@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { categorize } from './categories'
+import { categorize, resourceTitle } from './categories'
 import type { Resource } from './types'
 
 const r = (group: string, name: string, kind = name): Resource => ({
@@ -59,5 +59,30 @@ describe('category order', () => {
       'Access Control',
       'Custom Resources',
     ])
+  })
+})
+
+describe('resourceTitle', () => {
+  const t = (name: string, kind: string) => resourceTitle(r('', name, kind))
+
+  it('takes the plural from the API instead of appending an s', () => {
+    expect(t('pods', 'Pod')).toBe('Pods')
+    expect(t('ingresses', 'Ingress')).toBe('Ingresses')
+    expect(t('ingressclasses', 'IngressClass')).toBe('Ingress Classes')
+    expect(t('networkpolicies', 'NetworkPolicy')).toBe('Network Policies')
+    expect(t('endpoints', 'Endpoints')).toBe('Endpoints')
+    expect(t('storageclasses', 'StorageClass')).toBe('Storage Classes')
+    expect(t('horizontalpodautoscalers', 'HorizontalPodAutoscaler')).toBe(
+      'Horizontal Pod Autoscalers',
+    )
+    expect(t('prometheuses', 'Prometheus')).toBe('Prometheuses')
+  })
+
+  it('guesses sensibly when the API name does not line up with the kind', () => {
+    expect(t('weird', 'Ingress')).toBe('Ingresses')
+    expect(t('x', 'NetworkPolicy')).toBe('Network Policies')
+    expect(t('y', 'Gateway')).toBe('Gateways')
+    expect(t('z', 'Endpoints')).toBe('Endpoints')
+    expect(t('w', 'Status')).toBe('Statuses')
   })
 })

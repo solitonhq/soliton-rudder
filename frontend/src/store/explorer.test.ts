@@ -60,3 +60,49 @@ describe('opening a cluster', () => {
     expect(useExplorer.getState().selectedKey).toBe('core/v1/pods')
   })
 })
+
+describe('leaving an object with unsaved edits', () => {
+  const a = { uid: 'a', ns: 'ns', name: 'alpha' }
+  const b = { uid: 'b', ns: 'ns', name: 'beta' }
+  let confirm: ReturnType<typeof vi.fn>
+  beforeEach(() => {
+    confirm = vi.fn()
+    vi.stubGlobal('confirm', confirm)
+    useExplorer.setState({ selected: a, detailDirty: false })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('closes or switches silently when nothing is unsaved', () => {
+    useExplorer.getState().setSelected(b)
+    expect(useExplorer.getState().selected).toEqual(b)
+    useExplorer.getState().setSelected(null)
+    expect(useExplorer.getState().selected).toBeNull()
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('asks before closing or switching, and stays put when the user declines', () => {
+    useExplorer.setState({ detailDirty: true })
+    confirm.mockReturnValue(false)
+    useExplorer.getState().setSelected(null)
+    useExplorer.getState().setSelected(b)
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(confirm.mock.calls[0]![0]).toContain('alpha')
+    expect(useExplorer.getState().selected).toEqual(a)
+    expect(useExplorer.getState().detailDirty).toBe(true)
+  })
+
+  it('discards the edits and moves on when the user agrees', () => {
+    useExplorer.setState({ detailDirty: true })
+    confirm.mockReturnValue(true)
+    useExplorer.getState().setSelected(null)
+    expect(useExplorer.getState().selected).toBeNull()
+    expect(useExplorer.getState().detailDirty).toBe(false)
+  })
+
+  it('does not ask when the same object is selected again', () => {
+    useExplorer.setState({ detailDirty: true })
+    useExplorer.getState().setSelected({ ...a })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(useExplorer.getState().detailDirty).toBe(true)
+  })
+})

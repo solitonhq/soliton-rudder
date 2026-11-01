@@ -225,6 +225,7 @@ export function Explorer({ clusterId }: { clusterId: string }) {
               <div className="min-w-0 flex-1">
                 {resource && (
                   <ResourceTable
+                    key={resource.key} // widths are remembered per kind
                     namespaced={resource.namespaced}
                     resourceName={resource.name}
                     onAction={(action) => {

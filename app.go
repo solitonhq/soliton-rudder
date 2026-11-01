@@ -259,6 +259,26 @@ func (a *App) GetResourceMeta(clusterID, key, ns, name string) (kube.Meta, error
 	return s.Meta(a.ctx, key, ns, name)
 }
 
+// GetPodEnvironment returns the environment variables, env sources and volume mounts of a pod, without any
+// Secret or ConfigMap values (see GetRefValue).
+func (a *App) GetPodEnvironment(clusterID, ns, name string) (kube.PodEnv, error) {
+	s, err := a.withSession(clusterID)
+	if err != nil {
+		return kube.PodEnv{}, err
+	}
+	return s.PodEnvironment(a.ctx, ns, name)
+}
+
+// GetRefValue returns one key of a Secret ("secret") or ConfigMap ("configmap"). It is called only when the user asks
+// to show a value.
+func (a *App) GetRefValue(clusterID, ns, kind, name, key string) (string, error) {
+	s, err := a.withSession(clusterID)
+	if err != nil {
+		return "", err
+	}
+	return s.RefValue(a.ctx, ns, kind, name, key)
+}
+
 // ---- Terminals ----
 
 // OpenPodTerminal execs an interactive shell in a pod container.

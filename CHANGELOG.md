@@ -5,7 +5,31 @@ and the project uses [Semantic Versioning](https://semver.org/) (0.x: minor vers
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-01
+
+The first round of product feedback after the 0.1.0 pre-release: terminals can no longer leak between clusters, and
+the detail panel, tables and hotbar got the everyday improvements people asked for. Still a macOS pre-release; the
+build is not yet signed with an Apple Developer ID.
+
+### Added
+- **Adjustable column widths** in every resource table: drag a header's edge (or use ←/→ on the focused edge), double-click to reset
+  one column, right-click a header to reset all; widths are remembered per resource kind.
+- **Events tab** on every object (with a warning badge and an All / Warnings filter) and a one-event teaser on the Overview.
+  For workloads it now follows ownerReferences (ReplicaSets, Jobs, Pods, including pods that were replaced) instead of
+  name prefixes, so `web` no longer picks up the events of `web-api`.
+- **Environment & mounts** in the pod Overview: environment variables and their sources, `envFrom`, volumes and mounts.
+  Secret and ConfigMap values are fetched only when you press Show for one key, hidden again after 30 s, never logged.
+- **Quick Scale and Restart on rows**: hovering a Deployment, StatefulSet or DaemonSet row shows one-click Scale (prefilled with
+  the current replica count; empty when it is unknown) and Restart (with a confirmation) buttons; both are also in the right-click
+  menu. No need to open the detail panel first.
+- **Close the detail panel by clicking the empty space of the table.** If the YAML tab has unsaved edits, closing it or
+  selecting another object now asks before discarding them.
+
 ### Fixed
+- Plural kind names in the sidebar and page titles: "Ingresss", "Ingress Classs", "Endpointss" and "Network Policys" are now
+  "Ingresses", "Ingress Classes", "Endpoints" and "Network Policies" (taken from the API's own plural).
+- Autocorrect, auto-capitalisation and spell checking are off in every text field and in the editors (macOS used to pop up
+  "Orders ✕" under search boxes).
 - **Terminals, logs and apply tabs no longer leak between clusters.** The dock is scoped to the open cluster: its tab bar
   shows that cluster's name and colour and only its tabs; other clusters' tabs stay alive in the background and come back
   as you left them, and the hotbar shows a counter for clusters that still have open tabs. Tabs close when their
@@ -128,6 +152,7 @@ First public release (pre-release): macOS only, unsigned build.
 - Clicking a namespace in an all-namespaces table filters to that namespace.
 - App icon follows the macOS icon grid (artwork inset with margin), so it no longer looks oversized in the Dock.
 
-[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/solitonhq/soliton-rudder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/solitonhq/soliton-rudder/releases/tag/v0.1.0
 

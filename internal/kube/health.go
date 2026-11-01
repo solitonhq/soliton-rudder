@@ -474,14 +474,22 @@ func (s *Session) Timeline(ctx context.Context, key, ns, name string) ([]Event, 
 	evRes := Resource{Group: "core", Version: "v1", Name: "events", Namespaced: true}
 	opts := metav1.ListOptions{Limit: 1000}
 	scope := ns
-	related := func(involvedName string) bool { return involvedName == name }
+	// By default an object's events are those about an object of the same kind and name.
+	matches := func(ev *unstructured.Unstructured) bool {
+		io, _, _ := unstructured.NestedMap(ev.Object, "involvedObject")
+		return str(io["kind"]) == res.Kind && str(io["name"]) == name
+	}
 
 	switch res.Name {
 	case "nodes":
 		scope = ""
 		opts.FieldSelector = fmt.Sprintf("involvedObject.kind=Node,involvedObject.name=%s", name)
+		matches = func(*unstructured.Unstructured) bool { return true }
 	case "deployments", "statefulsets", "daemonsets", "replicasets", "jobs", "cronjobs":
-		related = func(n string) bool { return n == name || strings.HasPrefix(n, name+"-") }
+		// the workload, its replica sets / jobs and their pods, found through ownerReferences
+		if rel, err := s.relatedObjects(ctx, res, ns, name); err == nil {
+			matches = func(ev *unstructured.Unstructured) bool { return rel.matches(*ev) }
+		}
 	}
 	list, err := s.client(evRes, scope).List(ctx, opts)
 	if err != nil {
@@ -489,12 +497,11 @@ func (s *Session) Timeline(ctx context.Context, key, ns, name string) ([]Event, 
 	}
 	out := make([]Event, 0, 32)
 	for _, it := range list.Items {
-		io, _, _ := unstructured.NestedMap(it.Object, "involvedObject")
-		in := str(io["name"])
-		if res.Name != "nodes" && !related(in) {
+		if !matches(&it) {
 			continue
 		}
-		out = append(out, eventFrom(&it, fmt.Sprintf("%s/%s", str(io["kind"]), in)))
+		io, _, _ := unstructured.NestedMap(it.Object, "involvedObject")
+		out = append(out, eventFrom(&it, fmt.Sprintf("%s/%s", str(io["kind"]), str(io["name"]))))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Last > out[j].Last })
 	if len(out) > 200 {

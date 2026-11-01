@@ -65,6 +65,9 @@ interface ExplorerState {
   setSearch: (s: string) => void
   toggleSort: (col: string) => void
   setWide: (w: boolean) => void
+  /** The open detail panel has unsaved edits (set by the YAML tab). Leaving the object asks first. */
+  detailDirty: boolean
+  setDetailDirty: (dirty: boolean) => void
   setSelected: (r: RowRef | null) => void
 }
 
@@ -132,6 +135,7 @@ export const useExplorer = create<ExplorerState>((set, get) => ({
   sort: null,
   wide: false,
   selected: null,
+  detailDirty: false,
   access: null,
 
   async refreshAccess() {
@@ -243,7 +247,14 @@ export const useExplorer = create<ExplorerState>((set, get) => ({
     else set({ sort: null })
   },
   setWide: (wide) => set({ wide }),
-  setSelected: (selected) => set({ selected }),
+  setDetailDirty: (detailDirty) => set({ detailDirty }),
+  setSelected(next) {
+    const { selected, detailDirty } = get()
+    const leaving = !!selected && selected.uid !== next?.uid
+    if (leaving && detailDirty && !window.confirm(`Discard unsaved changes to ${selected.name}?`))
+      return
+    set({ selected: next, detailDirty: leaving ? false : detailDirty })
+  },
 }))
 
 export function currentResource(): Resource | undefined {

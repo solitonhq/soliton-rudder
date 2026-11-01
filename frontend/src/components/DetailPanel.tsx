@@ -4,7 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { insight, kube } from '../lib/backend'
 import { formatAge } from '../lib/format'
 import { usePoll } from '../lib/usePoll'
-import type { ObjectMeta, Resource } from '../lib/types'
+import type { ObjectMeta, Resource, TimelineEvent } from '../lib/types'
 import type { RowRef } from '../store/explorer'
 import { useDock } from '../store/dock'
 import { useExplorer } from '../store/explorer'
@@ -12,15 +12,24 @@ import { useUI } from '../store/ui'
 import { DataViewer } from './DataViewer'
 import { IngressDetails } from './IngressDetails'
 import { ProbesSection } from './ProbesSection'
-import { HealthCard, MetricsSection, Timeline } from './Insights'
+import {
+  EventsPanel,
+  EventsSummary,
+  HealthCard,
+  isWarning,
+  MetricsSection,
+  useTimeline,
+} from './Insights'
+import { PodEnvironment } from './PodEnvironment'
 import { FORWARD_KIND, FORWARDABLE } from '../lib/quickforward'
+import { RESTARTABLE, SCALABLE } from '../lib/workloads'
 import { DebugDialog } from '../dialogs/DebugDialog'
+import { ScaleDialog } from '../dialogs/ScaleDialog'
 import { ForwardDialog } from '../dialogs/ForwardDialog'
-import { Button, Dialog, Input } from './ui'
+import { Button, Dialog } from './ui'
 
 const YamlEditor = lazy(() => import('./YamlEditor').then((m) => ({ default: m.YamlEditor })))
 
-const SCALABLE = new Set(['deployments', 'statefulsets', 'replicasets', 'replicationcontrollers'])
 const LOGGABLE = new Set([
   'pods',
   'deployments',
@@ -31,11 +40,10 @@ const LOGGABLE = new Set([
   'services',
   'replicationcontrollers',
 ])
-const RESTARTABLE = new Set(['deployments', 'statefulsets', 'daemonsets'])
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-export type DetailTab = 'overview' | 'data' | 'yaml'
+export type DetailTab = 'overview' | 'events' | 'data' | 'yaml'
 
 export function DetailPanel({
   clusterId,
@@ -62,8 +70,21 @@ export function DetailPanel({
   const [debugOpen, setDebugOpen] = useState(false)
   const openTab = useDock((s) => s.openTab)
   const hasData = resource.name === 'configmaps' || resource.name === 'secrets'
-  const tab: DetailTab = requestedTab === 'data' && !hasData ? 'overview' : requestedTab
-  const tabs: DetailTab[] = hasData ? ['overview', 'data', 'yaml'] : ['overview', 'yaml']
+  const tab: DetailTab =
+    (requestedTab === 'data' && !hasData) ||
+    (requestedTab === 'events' && resource.name === 'events')
+      ? 'overview'
+      : requestedTab
+  // an Event has no events of its own
+  const hasEvents = resource.name !== 'events'
+  const tl = useTimeline(clusterId, resource, target)
+  const warnings = tl.events.filter(isWarning).length
+  const tabs: DetailTab[] = [
+    'overview',
+    ...(hasEvents ? (['events'] as const) : []),
+    ...(hasData ? (['data'] as const) : []),
+    'yaml',
+  ]
 
   const run = async (label: string, fn: () => Promise<void>) => {
     try {
@@ -176,14 +197,37 @@ export function DetailPanel({
               tab === t ? 'border-accent text-fg' : 'border-transparent text-muted hover:text-fg',
             )}
           >
-            {t === 'yaml' ? 'YAML' : t === 'data' ? 'Data' : 'Overview'}
+            {t === 'yaml' ? 'YAML' : t === 'data' ? 'Data' : t === 'events' ? 'Events' : 'Overview'}
+            {t === 'events' && warnings > 0 && (
+              <span
+                className="ml-1.5 rounded-full bg-warning/20 px-1.5 text-[10px] text-warning"
+                title={`${warnings} warning${warnings === 1 ? '' : 's'}`}
+                aria-label={`${warnings} warnings`}
+              >
+                {warnings}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       <div className="min-h-0 flex-1">
         {tab === 'overview' ? (
-          <Overview key={target.uid} clusterId={clusterId} resource={resource} target={target} />
+          <Overview
+            key={target.uid}
+            clusterId={clusterId}
+            resource={resource}
+            target={target}
+            events={hasEvents ? tl : null}
+            onOpenEvents={() => onTab('events')}
+          />
+        ) : tab === 'events' ? (
+          <EventsPanel
+            events={tl.events}
+            loaded={tl.loaded}
+            error={tl.error}
+            objectName={target.name}
+          />
         ) : tab === 'data' && hasData ? (
           <DataViewer key={target.uid} clusterId={clusterId} resource={resource} target={target} />
         ) : (
@@ -259,46 +303,6 @@ export function DetailPanel({
   )
 }
 
-function ScaleDialog({
-  name,
-  onClose,
-  onScale,
-}: {
-  name: string
-  onClose: () => void
-  onScale: (n: number) => Promise<void>
-}) {
-  const [n, setN] = useState('1')
-  const valid = /^\d+$/.test(n)
-  return (
-    <Dialog title={`Scale ${name}`} onClose={onClose} width={360}>
-      <label className="block text-xs font-medium text-muted">Replicas</label>
-      <Input
-        value={n}
-        onChange={(e) => setN(e.target.value)}
-        autoFocus
-        inputMode="numeric"
-        className="mt-1"
-      />
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          disabled={!valid}
-          onClick={() => {
-            onClose()
-            void onScale(Number(n))
-          }}
-        >
-          Scale
-        </Button>
-      </div>
-    </Dialog>
-  )
-}
-
 /** Where an Ingress receives traffic and where it sends it: addresses, clickable URLs, Service and pod IPs, TLS. */
 function IngressSection({ clusterId, target }: { clusterId: string; target: RowRef }) {
   const { data, error } = usePoll(
@@ -329,10 +333,14 @@ function Overview({
   clusterId,
   resource,
   target,
+  events,
+  onOpenEvents,
 }: {
   clusterId: string
   resource: Resource
   target: RowRef
+  events: { events: TimelineEvent[]; loaded: boolean } | null
+  onOpenEvents: () => void
 }) {
   const [meta, setMeta] = useState<ObjectMeta | null>(null)
   const [error, setError] = useState('')
@@ -359,8 +367,14 @@ function Overview({
   return (
     <div className="h-full select-text overflow-auto p-4 text-[13px]">
       <HealthCard clusterId={clusterId} resource={resource} target={target} />
+      {events && (
+        <EventsSummary events={events.events} loaded={events.loaded} onOpen={onOpenEvents} />
+      )}
       {resource.name === 'pods' && (
         <ProbesSection clusterId={clusterId} ns={target.ns} pod={target.name} />
+      )}
+      {resource.name === 'pods' && (
+        <PodEnvironment clusterId={clusterId} ns={target.ns} pod={target.name} />
       )}
       {resource.name === 'ingresses' && <IngressSection clusterId={clusterId} target={target} />}
       <MetricsSection clusterId={clusterId} resource={resource} target={target} />
@@ -426,8 +440,6 @@ function Overview({
           ))}
         </div>
       </Section>
-
-      <Timeline clusterId={clusterId} resource={resource} target={target} />
     </div>
   )
 }
@@ -484,6 +496,12 @@ function YamlTab({
 
   const dirty = orig !== null && text !== orig
   const readOnly = resource.name === 'events'
+
+  // let the explorer ask before the panel is closed or another object is selected
+  useEffect(() => {
+    useExplorer.getState().setDetailDirty(dirty)
+    return () => useExplorer.getState().setDetailDirty(false)
+  }, [dirty])
 
   const save = async () => {
     setSaving(true)
