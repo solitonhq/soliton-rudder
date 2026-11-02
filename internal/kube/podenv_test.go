@@ -154,6 +154,32 @@ func TestRefValueDecodesSecretsAndReadsConfigMaps(t *testing.T) {
 	}
 }
 
+func TestRefKeysListsNamesAndSizesButNoValues(t *testing.T) {
+	s := refServer(t)
+	ctx := context.Background()
+	keys, err := s.RefKeys(ctx, "shop", "secret", "db")
+	if err != nil || len(keys) != 2 || keys[0].Name != "big" || keys[1].Name != "password" {
+		t.Fatalf("sorted by name: %+v %v", keys, err)
+	}
+	if keys[1].Size != len("s3cr3t!") || keys[0].Size != maxRefValue+10 {
+		t.Fatalf("size is the decoded length: %+v", keys)
+	}
+	b, _ := json.Marshal(keys)
+	if strings.Contains(string(b), "s3cr3t") {
+		t.Fatalf("a value must never be part of the key list: %s", b)
+	}
+	cm, err := s.RefKeys(ctx, "shop", "configmap", "app-config")
+	if err != nil || len(cm) != 2 || cm[0].Name != "blob" || !cm[0].Binary || cm[1].Name != "theme" || cm[1].Binary {
+		t.Fatalf("binary keys are flagged: %+v %v", cm, err)
+	}
+	if _, err := s.RefKeys(ctx, "shop", "secret", "locked"); err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("the RBAC error must reach the user: %v", err)
+	}
+	if _, err := s.RefKeys(ctx, "shop", "pods", "db"); err == nil {
+		t.Fatal("only secrets and configmaps can be read")
+	}
+}
+
 func TestRefValueErrors(t *testing.T) {
 	s := refServer(t)
 	ctx := context.Background()

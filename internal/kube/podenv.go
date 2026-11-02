@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sort"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -165,20 +166,71 @@ func (s *Session) PodEnvironment(ctx context.Context, ns, name string) (PodEnv, 
 	return podEnvironment(&pod), nil
 }
 
+// RefKey names one key of a Secret or ConfigMap. It carries no value: values are fetched one at a time (RefValue).
+type RefKey struct {
+	Name   string `json:"name"`
+	Size   int    `json:"size"`   // bytes of the decoded value
+	Binary bool   `json:"binary"` // a ConfigMap binaryData key, which RefValue cannot show
+}
+
+// refResource maps the kind used in the UI to the resource to read.
+func refResource(kind string) (Resource, error) {
+	switch kind {
+	case "secret":
+		return Resource{Group: "core", Version: "v1", Name: "secrets", Namespaced: true}, nil
+	case "configmap":
+		return Resource{Group: "core", Version: "v1", Name: "configmaps", Namespaced: true}, nil
+	}
+	return Resource{}, fmt.Errorf("unsupported kind %q", kind)
+}
+
+// RefKeys lists the keys of a Secret or ConfigMap with their sizes, so the pod view can show everything an envFrom or a
+// volume brings in. The values stay on the server side of this call: it returns names and sizes only.
+func (s *Session) RefKeys(ctx context.Context, ns, kind, name string) ([]RefKey, error) {
+	res, err := refResource(kind)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, opTimeout)
+	defer cancel()
+	obj, err := s.client(res, ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	keys := []RefKey{}
+	data, _ := obj.Object["data"].(map[string]any)
+	for k, v := range data {
+		raw, _ := v.(string)
+		size := len(raw)
+		if kind == "secret" { // base64 on the wire
+			size = base64.StdEncoding.DecodedLen(len(raw))
+			if n := len(raw); n > 0 && raw[n-1] == '=' {
+				size--
+				if n > 1 && raw[n-2] == '=' {
+					size--
+				}
+			}
+		}
+		keys = append(keys, RefKey{Name: k, Size: size})
+	}
+	bin, _ := obj.Object["binaryData"].(map[string]any)
+	for k, v := range bin {
+		raw, _ := v.(string)
+		keys = append(keys, RefKey{Name: k, Size: base64.StdEncoding.DecodedLen(len(raw)), Binary: true})
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].Name < keys[j].Name })
+	return keys, nil
+}
+
 // maxRefValue bounds what one reveal returns; a key larger than this (a big certificate bundle) is cut and says so.
 const maxRefValue = 64 * 1024
 
 // RefValue returns the value of one key of a Secret or ConfigMap, on demand: the pod view never loads values by itself.
 // It is only called when the user asks to show a value, and the value is not logged or cached here.
 func (s *Session) RefValue(ctx context.Context, ns, kind, name, key string) (string, error) {
-	var res Resource
-	switch kind {
-	case "secret":
-		res = Resource{Group: "core", Version: "v1", Name: "secrets", Namespaced: true}
-	case "configmap":
-		res = Resource{Group: "core", Version: "v1", Name: "configmaps", Namespaced: true}
-	default:
-		return "", fmt.Errorf("unsupported kind %q", kind)
+	res, err := refResource(kind)
+	if err != nil {
+		return "", err
 	}
 	ctx, cancel := context.WithTimeout(ctx, opTimeout)
 	defer cancel()

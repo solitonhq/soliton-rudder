@@ -1074,6 +1074,12 @@ export interface EnvVar {
   optional: boolean
   detail: string
 }
+/** One key of a Secret or ConfigMap: name and size only, never the value. */
+export interface RefKey {
+  name: string
+  size: number
+  binary: boolean
+}
 export interface EnvFromRef {
   kind: 'secret' | 'configmap'
   name: string
