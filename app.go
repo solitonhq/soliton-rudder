@@ -279,6 +279,15 @@ func (a *App) GetRefValue(clusterID, ns, kind, name, key string) (string, error)
 	return s.RefValue(a.ctx, ns, kind, name, key)
 }
 
+// GetRefKeys lists the keys (names and sizes, no values) of a Secret ("secret") or ConfigMap ("configmap").
+func (a *App) GetRefKeys(clusterID, ns, kind, name string) ([]kube.RefKey, error) {
+	s, err := a.withSession(clusterID)
+	if err != nil {
+		return nil, err
+	}
+	return s.RefKeys(a.ctx, ns, kind, name)
+}
+
 // ---- Terminals ----
 
 // OpenPodTerminal execs an interactive shell in a pod container.

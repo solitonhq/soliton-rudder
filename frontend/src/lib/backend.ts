@@ -56,6 +56,7 @@ import type {
   MetricsSeries,
   ObjectMeta,
   PodEnv,
+  RefKey,
   PluginInfo,
   PluginInspection,
   PortInfo,
@@ -128,6 +129,7 @@ type Bindings = {
   GetResourceMeta(c: string, key: string, ns: string, name: string): Promise<ObjectMeta>
   GetPodEnvironment(c: string, ns: string, name: string): Promise<PodEnv>
   GetRefValue(c: string, ns: string, kind: string, name: string, key: string): Promise<string>
+  GetRefKeys(c: string, ns: string, kind: string, name: string): Promise<RefKey[]>
   OpenPodTerminal(
     c: string,
     ns: string,
@@ -413,6 +415,9 @@ export const kube = {
   /** One Secret or ConfigMap key, fetched only when the user asks to see it. */
   refValue: (c: string, ns: string, kind: 'secret' | 'configmap', name: string, key: string) =>
     callOrFail((b) => b.GetRefValue(c, ns, kind, name, key)),
+  /** The keys (names and sizes, no values) of a Secret or ConfigMap. */
+  refKeys: async (c: string, ns: string, kind: 'secret' | 'configmap', name: string) =>
+    (await callOrFail((b) => b.GetRefKeys(c, ns, kind, name))) ?? [],
 }
 
 export const tools = {

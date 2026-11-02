@@ -5,6 +5,16 @@ and the project uses [Semantic Versioning](https://semver.org/) (0.x: minor vers
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-02
+
+### Added
+- Pod "Environment & mounts": a Secret or ConfigMap that comes in through `envFrom`, or as a volume, expands into its
+  keys (name and size). Secret values stay masked behind an eye on each key, ConfigMap values are shown, and **Show
+  secrets** opens every Secret list. Binary keys are listed but never read. The new `GetRefKeys` call returns names
+  and sizes only, never values.
+- The Volumes list says which container mounts each volume, at which path and whether read-only or read-write, and
+  is open by default.
+
 ## [0.2.2] - 2026-11-02
 
 ### Changed
@@ -177,7 +187,8 @@ First public release (pre-release): macOS only, unsigned build.
 - Clicking a namespace in an all-namespaces table filters to that namespace.
 - App icon follows the macOS icon grid (artwork inset with margin), so it no longer looks oversized in the Dock.
 
-[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/solitonhq/soliton-rudder/compare/v0.1.0...v0.2.0

@@ -77,6 +77,14 @@ let App: Record<string, ReturnType<typeof vi.fn>>
 beforeEach(() => {
   App = {
     GetPodEnvironment: vi.fn().mockResolvedValue(env),
+    GetRefKeys: vi.fn().mockImplementation(async (_c: string, _n: string, kind: string) =>
+      kind === 'secret'
+        ? [
+            { name: 'TOKEN', size: 7, binary: false },
+            { name: 'cert.pem', size: 2048, binary: true },
+          ]
+        : [{ name: 'theme', size: 4, binary: false }],
+    ),
     GetRefValue: vi
       .fn()
       .mockImplementation(async (_c: string, _n: string, kind: string) =>
@@ -101,7 +109,7 @@ describe('PodEnvironment', () => {
     expect(screen.getByText('/ password')).toBeTruthy()
     expect(screen.getByText('status.podIP')).toBeTruthy()
     expect(screen.getByText(/with prefix/)).toBeTruthy()
-    expect(screen.getByText('/etc/tls')).toBeTruthy()
+    expect(screen.getAllByText('/etc/tls').length).toBe(2) // under the container and under the volume
     expect(screen.getByText('init')).toBeTruthy() // the init container is marked
     expect(await screen.findByText('dark')).toBeTruthy() // a ConfigMap value is fetched by itself
     expect(screen.queryByText('s3cr3t!')).toBeNull()
@@ -109,11 +117,43 @@ describe('PodEnvironment', () => {
     // the only fetch is the ConfigMap key; no Secret is read until you ask
     expect(App.GetRefValue).toHaveBeenCalledTimes(1)
     expect(App.GetRefValue).toHaveBeenCalledWith('c1', 'shop', 'configmap', 'app-config', 'theme')
-    // a mount names where it comes from; the full volume list is one click away
-    expect(screen.getByText('tls-cert')).toBeTruthy()
-    expect(screen.getByText('read-only')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Volumes/ }))
+    // a mount names where it comes from; the volume list says which container mounts what, and where
+    expect(screen.getAllByText('tls-cert').length).toBeGreaterThan(0)
     expect(screen.getByText('web-data')).toBeTruthy()
+    expect(screen.getAllByText('not mounted by any container').length).toBe(2) // data and token
+    expect(screen.getAllByText('mounted in').length).toBeGreaterThan(0)
+    expect(App.GetRefKeys).not.toHaveBeenCalled() // key lists load when opened
+  })
+
+  it('expands an envFrom Secret into its keys, masked, with an eye to reveal each one', async () => {
+    mount()
+    await screen.findByText('DB_PASSWORD')
+    fireEvent.click(screen.getByRole('button', { name: 'Expand secret api-keys' }))
+    expect(await screen.findByText('API_TOKEN')).toBeTruthy() // the prefix is applied
+    expect(screen.getByText('API_cert.pem')).toBeTruthy()
+    expect(screen.getByText('binary data, not shown')).toBeTruthy() // a binary key is listed, never read
+    expect(App.GetRefKeys).toHaveBeenCalledWith('c1', 'shop', 'secret', 'api-keys')
+    expect(screen.queryByText('s3cr3t!')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Show value' }))
+    expect(await screen.findByText('s3cr3t!')).toBeTruthy()
+    expect(App.GetRefValue).toHaveBeenCalledWith('c1', 'shop', 'secret', 'api-keys', 'TOKEN')
+    fireEvent.click(screen.getByRole('button', { name: 'Hide value' }))
+    expect(screen.queryByText('s3cr3t!')).toBeNull()
+  })
+
+  it('lists the files of a Secret volume the same way', async () => {
+    mount()
+    await screen.findByText('DB_PASSWORD')
+    fireEvent.click(screen.getByRole('button', { name: 'Expand secret tls-cert' }))
+    expect(await screen.findByText('TOKEN')).toBeTruthy()
+    expect(App.GetRefKeys).toHaveBeenCalledWith('c1', 'shop', 'secret', 'tls-cert')
+  })
+
+  it('Show secrets also opens the Secret key lists', async () => {
+    mount()
+    await screen.findByText('DB_PASSWORD')
+    fireEvent.click(screen.getByRole('button', { name: /Show secrets/ }))
+    expect(await screen.findByText('API_TOKEN')).toBeTruthy()
   })
 
   it('shows one value on request, can hide and copy it', async () => {

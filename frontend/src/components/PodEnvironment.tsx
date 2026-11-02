@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { kube } from '../lib/backend'
-import type { ContainerEnv, EnvFromRef, EnvVar, PodEnv, PodVolume } from '../lib/types'
+import type { ContainerEnv, EnvFromRef, EnvVar, PodEnv, PodVolume, RefKey } from '../lib/types'
 import { useExplorer } from '../store/explorer'
 import { useUI } from '../store/ui'
 
@@ -75,9 +75,10 @@ export function PodEnvironment({
   const volumes = env?.volumes ?? []
   const vars = containers.reduce((n, c) => n + c.env.length + c.envFrom.length, 0)
   const mounts = containers.reduce((n, c) => n + c.mounts.length, 0)
-  const hasSecrets = containers.some(
-    (c) => c.env.some((e) => e.source === 'secret') || c.envFrom.some((f) => f.kind === 'secret'),
-  )
+  const hasSecrets =
+    containers.some(
+      (c) => c.env.some((e) => e.source === 'secret') || c.envFrom.some((f) => f.kind === 'secret'),
+    ) || volumes.some((v) => v.kind === 'secret')
   const revealed = bulk.action === 'show'
   const q = filter.trim().toLowerCase()
 
@@ -149,7 +150,9 @@ export function PodEnvironment({
                 startOpen={containers.length === 1 || !c.init}
               />
             ))}
-            {volumes.length > 0 && !q && <Volumes volumes={volumes} />}
+            {volumes.length > 0 && !q && (
+              <Volumes volumes={volumes} containers={containers} clusterId={clusterId} ns={ns} />
+            )}
           </div>
         </BulkContext.Provider>
       )}
@@ -204,7 +207,7 @@ function ContainerBlock({
                 <EnvRow key={e.name} e={e} clusterId={clusterId} ns={ns} />
               ))}
               {froms.map((f, i) => (
-                <EnvFromRow key={`${f.kind}/${f.name}/${i}`} f={f} />
+                <EnvFromRow key={`${f.kind}/${f.name}/${i}`} f={f} clusterId={clusterId} ns={ns} />
               ))}
             </div>
           )}
@@ -302,26 +305,152 @@ function EnvRow({ e, clusterId, ns }: { e: EnvVar; clusterId: string; ns: string
   )
 }
 
-function EnvFromRow({ f }: { f: EnvFromRef }) {
+function EnvFromRow({ f, clusterId, ns }: { f: EnvFromRef; clusterId: string; ns: string }) {
   return (
-    <div className="grid grid-cols-[minmax(90px,2fr)_minmax(0,3fr)] items-start gap-3 px-3 py-1.5 text-xs">
-      <div className="text-muted">
-        All keys
-        {f.prefix && (
-          <>
-            {' '}
-            with prefix <span className="font-mono">{f.prefix}</span>
-          </>
+    <RefKeysBlock
+      clusterId={clusterId}
+      ns={ns}
+      kind={f.kind}
+      name={f.name}
+      prefix={f.prefix}
+      optional={f.optional}
+      noun="All keys"
+    />
+  )
+}
+
+/**
+ * Everything a Secret or ConfigMap brings into the pod (envFrom, or files of a volume), key by key. The key list is
+ * fetched when the block is opened; Secret values stay masked behind an eye, ConfigMap values are shown.
+ */
+function RefKeysBlock({
+  clusterId,
+  ns,
+  kind,
+  name,
+  prefix = '',
+  optional = false,
+  noun,
+}: {
+  clusterId: string
+  ns: string
+  kind: 'secret' | 'configmap'
+  name: string
+  prefix?: string
+  optional?: boolean
+  noun: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [keys, setKeys] = useState<RefKey[] | null>(null)
+  const [error, setError] = useState('')
+  const loaded = useRef(false)
+  const Chevron = open ? ChevronDown : ChevronRight
+
+  const load = useCallback(async () => {
+    loaded.current = true
+    try {
+      setKeys(await kube.refKeys(clusterId, ns, kind, name))
+      setError('')
+    } catch (e) {
+      setError(errText(e))
+    }
+  }, [clusterId, ns, kind, name])
+
+  const toggle = () => {
+    const next = !open
+    setOpen(next)
+    if (next && !loaded.current) void load()
+  }
+
+  // "Show secrets" in the section header opens the Secret key lists too
+  const bulk = useContext(BulkContext)
+  useEffect(() => {
+    if (kind !== 'secret' || bulk.seq === 0 || bulk.action !== 'show') return
+    const t = setTimeout(() => {
+      setOpen(true)
+      if (!loaded.current) void load()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [kind, bulk, load])
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5 text-xs">
+        <button
+          onClick={toggle}
+          aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${kind} ${name}`}
+          className="inline-flex cursor-pointer items-center gap-1 text-muted hover:text-fg"
+        >
+          <Chevron size={13} aria-hidden />
+          {noun}
+          {prefix && (
+            <>
+              {' '}
+              with prefix <span className="font-mono">{prefix}</span>
+            </>
+          )}
+        </button>
+        <span className="text-muted">{kind}</span>
+        <RefLink kind={kind} name={name} />
+        {optional && <span className="text-muted">optional</span>}
+        {keys && (
+          <span className="text-muted">
+            · {keys.length} key{keys.length === 1 ? '' : 's'}
+          </span>
         )}
       </div>
-      <div className="min-w-0">
-        <span className="mr-1.5 text-muted">{f.kind}</span>
-        <RefLink kind={f.kind} name={f.name} />
-        {f.optional && <span className="ml-2 text-muted">optional</span>}
-      </div>
+      {open && (
+        <div className="border-t border-border/60 bg-bg/40">
+          {error ? (
+            <div className="px-3 py-1.5 text-[11px] text-danger">{error}</div>
+          ) : keys === null ? (
+            <div className="px-3 py-1.5 text-[11px] text-muted">Loading…</div>
+          ) : keys.length === 0 ? (
+            <div className="px-3 py-1.5 text-[11px] text-muted">No keys.</div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {keys.map((k) => (
+                <div
+                  key={k.name}
+                  className="grid grid-cols-[minmax(90px,2fr)_minmax(0,3fr)] items-start gap-3 py-1.5 pl-8 pr-3 text-xs"
+                >
+                  <div className="min-w-0">
+                    <div className="break-all font-mono font-semibold">{prefix + k.name}</div>
+                    <div className="mt-0.5 text-[10px] text-muted">{formatBytes(k.size)}</div>
+                  </div>
+                  <div className="min-w-0">
+                    {k.binary ? (
+                      <span className="text-muted">binary data, not shown</span>
+                    ) : (
+                      <RefValue
+                        bare
+                        kind={kind}
+                        clusterId={clusterId}
+                        ns={ns}
+                        name={name}
+                        keyName={k.name}
+                        optional={false}
+                        auto={kind === 'configmap' && k.size <= 4096}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
+
+const formatBytes = (n: number) =>
+  n < 1024
+    ? `${n} B`
+    : n < 1024 * 1024
+      ? `${(n / 1024).toFixed(1)} KiB`
+      : `${(n / 1048576).toFixed(1)} MiB`
 
 function RefLink({ kind, name }: { kind: 'secret' | 'configmap'; name: string }) {
   return (
@@ -348,6 +477,8 @@ function RefValue({
   name,
   keyName,
   optional,
+  bare = false,
+  auto,
 }: {
   kind: 'secret' | 'configmap'
   clusterId: string
@@ -355,6 +486,10 @@ function RefValue({
   name: string
   keyName: string
   optional: boolean
+  /** Only the value and an eye, for key lists where the Secret and key are already named by the row. */
+  bare?: boolean
+  /** Fetch the value as soon as it is shown. Defaults to true for a ConfigMap and false for a Secret. */
+  auto?: boolean
 }) {
   const toast = useUI((s) => s.toast)
   const [value, setValue] = useState<string | null>(null)
@@ -363,6 +498,7 @@ function RefValue({
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const secret = kind === 'secret'
+  const autoLoad = auto ?? !secret
 
   const hide = useCallback(() => {
     if (timer.current) clearTimeout(timer.current)
@@ -387,10 +523,10 @@ function RefValue({
 
   // ConfigMap values load by themselves; deferred so it is not a synchronous state cascade
   useEffect(() => {
-    if (secret) return
+    if (!autoLoad) return
     const t = setTimeout(() => void show(), 0)
     return () => clearTimeout(t)
-  }, [secret, show])
+  }, [autoLoad, show])
 
   const bulk = useContext(BulkContext)
   useEffect(() => {
@@ -408,6 +544,61 @@ function RefValue({
     } catch {
       toast('error', 'Could not copy to the clipboard')
     }
+  }
+
+  if (bare) {
+    const iconBtn =
+      'inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded border border-border text-muted hover:border-accent hover:text-accent disabled:opacity-50'
+    return (
+      <div>
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            {value !== null ? (
+              <pre className="max-h-40 select-text overflow-auto whitespace-pre-wrap break-all font-mono text-xs">
+                {value || <span className="text-muted">(empty)</span>}
+              </pre>
+            ) : secret ? (
+              <span
+                className="font-mono tracking-widest text-muted"
+                aria-label="hidden secret value"
+              >
+                ••••••••
+              </span>
+            ) : (
+              <span className="text-muted">{busy ? 'Loading…' : '—'}</span>
+            )}
+          </div>
+          {value !== null ? (
+            <>
+              <button
+                onClick={() => void copy()}
+                className={iconBtn}
+                title="Copy the value"
+                aria-label="Copy value"
+              >
+                {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+              </button>
+              {secret && (
+                <button onClick={hide} className={iconBtn} title="Hide" aria-label="Hide value">
+                  <EyeOff size={12} aria-hidden />
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={() => void show()}
+              disabled={busy}
+              className={iconBtn}
+              title="Show the value"
+              aria-label="Show value"
+            >
+              <Eye size={12} aria-hidden />
+            </button>
+          )}
+        </div>
+        {error && <div className="mt-1 text-[11px] text-danger">{error}</div>}
+      </div>
+    )
   }
 
   return (
@@ -449,8 +640,18 @@ function RefValue({
   )
 }
 
-function Volumes({ volumes }: { volumes: PodVolume[] }) {
-  const [open, setOpen] = useState(false)
+function Volumes({
+  volumes,
+  containers,
+  clusterId,
+  ns,
+}: {
+  volumes: PodVolume[]
+  containers: ContainerEnv[]
+  clusterId: string
+  ns: string
+}) {
+  const [open, setOpen] = useState(true)
   const Chevron = open ? ChevronDown : ChevronRight
   return (
     <div className="overflow-hidden rounded-lg border border-border">
@@ -465,42 +666,83 @@ function Volumes({ volumes }: { volumes: PodVolume[] }) {
       </button>
       {open && (
         <div className="divide-y divide-border border-t border-border">
-          {volumes.map((v) => (
-            <div
-              key={v.name}
-              className="grid grid-cols-[minmax(90px,2fr)_minmax(0,3fr)] items-start gap-3 px-3 py-1.5 text-xs"
-            >
-              <span className="break-all font-mono font-semibold">{v.name}</span>
-              <div className="min-w-0 space-y-0.5">
-                {v.kind === 'secret' || v.kind === 'configmap' ? (
-                  <div>
-                    <span className="mr-1 text-muted">{v.kind}</span>
-                    <RefLink kind={v.kind} name={v.ref} />
-                  </div>
-                ) : v.kind === 'projected' ? (
-                  <div className="text-muted">
-                    projected
-                    {v.sources.map((s, i) => (
-                      <div key={i}>
-                        {s.kind === 'secret' || s.kind === 'configmap' ? (
-                          <>
-                            {s.kind} <RefLink kind={s.kind} name={s.name} />
-                          </>
-                        ) : (
-                          s.kind
-                        )}
+          {volumes.map((v) => {
+            const users = containers.flatMap((c) =>
+              c.mounts
+                .filter((m) => m.volume === v.name)
+                .map((m) => ({ container: c.name, init: c.init, ...m })),
+            )
+            return (
+              <div key={v.name} className="text-xs">
+                <div className="grid grid-cols-[minmax(90px,2fr)_minmax(0,3fr)] items-start gap-3 px-3 py-1.5">
+                  <span className="break-all font-mono font-semibold">{v.name}</span>
+                  <div className="min-w-0 space-y-0.5">
+                    {v.kind === 'secret' || v.kind === 'configmap' ? (
+                      <div>
+                        <span className="mr-1 text-muted">{v.kind}</span>
+                        <RefLink kind={v.kind} name={v.ref} />
                       </div>
-                    ))}
+                    ) : v.kind === 'projected' ? (
+                      <div className="text-muted">
+                        projected
+                        {v.sources.map((s, i) => (
+                          <div key={i}>
+                            {s.kind === 'secret' || s.kind === 'configmap' ? (
+                              <>
+                                {s.kind} <RefLink kind={s.kind} name={s.name} />
+                              </>
+                            ) : (
+                              s.kind
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted">
+                        {v.kind === 'pvc' ? 'claim' : v.kind}
+                        {v.ref && <span className="ml-1 break-all font-mono text-fg">{v.ref}</span>}
+                      </span>
+                    )}
+                    {users.length === 0 ? (
+                      <div className="text-[11px] text-muted">not mounted by any container</div>
+                    ) : (
+                      users.map((u) => (
+                        <div
+                          key={`${u.container}:${u.path}`}
+                          className="flex flex-wrap items-baseline gap-x-1.5 text-[11px]"
+                        >
+                          <span className="text-muted">mounted in</span>
+                          <span className="font-semibold">{u.container}</span>
+                          {u.init && (
+                            <span className={clsx(chip, 'bg-surface-hover text-muted')}>init</span>
+                          )}
+                          <span className="text-muted">at</span>
+                          <span className="break-all font-mono">
+                            {u.path}
+                            {u.subPath && <span className="text-muted"> ({u.subPath})</span>}
+                          </span>
+                          <span className="text-muted">
+                            {u.readOnly ? 'read-only' : 'read-write'}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
-                ) : (
-                  <span className="text-muted">
-                    {v.kind === 'pvc' ? 'claim' : v.kind}
-                    {v.ref && <span className="ml-1 break-all font-mono text-fg">{v.ref}</span>}
-                  </span>
+                </div>
+                {(v.kind === 'secret' || v.kind === 'configmap') && v.ref && (
+                  <div className="border-t border-border/60">
+                    <RefKeysBlock
+                      clusterId={clusterId}
+                      ns={ns}
+                      kind={v.kind}
+                      name={v.ref}
+                      noun="Files"
+                    />
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
