@@ -5,6 +5,19 @@ and the project uses [Semantic Versioning](https://semver.org/) (0.x: minor vers
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-02
+
+### Changed
+- Workload rows: the hover buttons now say what they do (**Forward**, **Scale**, **Restart**), and the right-click menu
+  uses the same words. **Port forward…** opens the forward dialog (ports discovered, local port and browser choice);
+  **Quick forward (free port)** keeps the one-click behaviour.
+- Scale dialog: shows the desired and ready replica counts, has −/+ steppers and quick values (0, 1, 2, 3, 5, 10),
+  previews the change ("3 → 5 (+2 pods)") and the button names the target ("Scale to 5").
+- Pod details: **Environment & mounts** moved to the bottom of the Overview and reworked the way Lens lays it out:
+  one collapsible card per container, ConfigMap values shown straight away, Secret values masked until you press Show
+  (or **Show secrets** for all of them; hidden again after 30 seconds), mounts name the Secret/ConfigMap/claim they
+  come from and whether they are read-only, a filter box for long lists, and the volume list on demand.
+
 ## [0.2.1] - 2026-11-02
 
 ### Added
@@ -164,7 +177,8 @@ First public release (pre-release): macOS only, unsigned build.
 - Clicking a namespace in an all-namespaces table filters to that namespace.
 - App icon follows the macOS icon grid (artwork inset with margin), so it no longer looks oversized in the Dock.
 
-[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/solitonhq/soliton-rudder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/solitonhq/soliton-rudder/releases/tag/v0.1.0

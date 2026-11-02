@@ -77,7 +77,11 @@ let App: Record<string, ReturnType<typeof vi.fn>>
 beforeEach(() => {
   App = {
     GetPodEnvironment: vi.fn().mockResolvedValue(env),
-    GetRefValue: vi.fn().mockResolvedValue('s3cr3t!'),
+    GetRefValue: vi
+      .fn()
+      .mockImplementation(async (_c: string, _n: string, kind: string) =>
+        kind === 'secret' ? 's3cr3t!' : 'dark',
+      ),
   }
   ;(window as unknown as { go: unknown }).go = { main: { App } }
 })
@@ -90,7 +94,7 @@ afterEach(() => {
 const mount = () => render(<PodEnvironment clusterId="c1" ns="shop" pod="web-1" />)
 
 describe('PodEnvironment', () => {
-  it('lists references, literals and mounts, and shows no secret value up front', async () => {
+  it('lists references, literals and mounts; ConfigMap values load, Secret values stay masked', async () => {
     mount()
     expect(await screen.findByText('production')).toBeTruthy() // literals are in the pod spec anyway
     expect(screen.getByText('DB_PASSWORD')).toBeTruthy()
@@ -99,9 +103,17 @@ describe('PodEnvironment', () => {
     expect(screen.getByText(/with prefix/)).toBeTruthy()
     expect(screen.getByText('/etc/tls')).toBeTruthy()
     expect(screen.getByText('init')).toBeTruthy() // the init container is marked
-    expect(screen.getByText('web-data')).toBeTruthy()
+    expect(await screen.findByText('dark')).toBeTruthy() // a ConfigMap value is fetched by itself
     expect(screen.queryByText('s3cr3t!')).toBeNull()
-    expect(App.GetRefValue).not.toHaveBeenCalled() // nothing is fetched until you ask
+    expect(screen.getAllByLabelText('hidden secret value').length).toBeGreaterThan(0)
+    // the only fetch is the ConfigMap key; no Secret is read until you ask
+    expect(App.GetRefValue).toHaveBeenCalledTimes(1)
+    expect(App.GetRefValue).toHaveBeenCalledWith('c1', 'shop', 'configmap', 'app-config', 'theme')
+    // a mount names where it comes from; the full volume list is one click away
+    expect(screen.getByText('tls-cert')).toBeTruthy()
+    expect(screen.getByText('read-only')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Volumes/ }))
+    expect(screen.getByText('web-data')).toBeTruthy()
   })
 
   it('shows one value on request, can hide and copy it', async () => {
@@ -112,22 +124,23 @@ describe('PodEnvironment', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^Show$/ })[0]!)
     expect(await screen.findByText('s3cr3t!')).toBeTruthy()
     expect(App.GetRefValue).toHaveBeenCalledWith('c1', 'shop', 'secret', 'db', 'password')
-    fireEvent.click(screen.getByRole('button', { name: /Copy/ }))
+    fireEvent.click(screen.getAllByRole('button', { name: /Copy/ })[0]!)
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('s3cr3t!'))
     fireEvent.click(screen.getByRole('button', { name: /Hide/ }))
     expect(screen.queryByText('s3cr3t!')).toBeNull()
   })
 
-  it('shows and hides every referenced value from the section header', async () => {
+  it('shows and hides every Secret value from the section header', async () => {
     App.GetRefValue!.mockImplementation(async (_c, _n, _k, name: string) => `v-${name}`)
     mount()
     await screen.findByText('DB_PASSWORD')
-    fireEvent.click(screen.getByRole('button', { name: /Show all values/ }))
+    expect(await screen.findByText('v-app-config')).toBeTruthy() // ConfigMap: already there
+    expect(screen.queryByText('v-db')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Show secrets/ }))
     expect(await screen.findByText('v-db')).toBeTruthy()
-    expect(await screen.findByText('v-app-config')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: /Hide all values/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Hide secrets/ }))
     await waitFor(() => expect(screen.queryByText('v-db')).toBeNull())
-    expect(screen.queryByText('v-app-config')).toBeNull()
+    expect(screen.getByText('v-app-config')).toBeTruthy() // only secrets are hidden again
   })
 
   it('hides a revealed value by itself after 30 seconds', async () => {
@@ -150,7 +163,7 @@ describe('PodEnvironment', () => {
     mount()
     await screen.findByText('DB_PASSWORD')
     fireEvent.click(screen.getAllByRole('button', { name: /^Show$/ })[0]!)
-    expect(await screen.findByText(/is forbidden/)).toBeTruthy()
+    expect((await screen.findAllByText(/is forbidden/)).length).toBeGreaterThan(0)
   })
 
   it('a reference opens the Secret list filtered to that name', async () => {

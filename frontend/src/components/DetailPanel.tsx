@@ -358,6 +358,7 @@ export function DetailPanel({
       {scaleOpen && (
         <ScaleDialog
           name={target.name}
+          kind={resource.kind.toLowerCase()}
           onClose={() => setScaleOpen(false)}
           onScale={(n) =>
             run(`Scaled to ${n}`, () =>
@@ -440,9 +441,6 @@ function Overview({
       {resource.name === 'pods' && (
         <ProbesSection clusterId={clusterId} ns={target.ns} pod={target.name} />
       )}
-      {resource.name === 'pods' && (
-        <PodEnvironment clusterId={clusterId} ns={target.ns} pod={target.name} />
-      )}
       {resource.name === 'ingresses' && <IngressSection clusterId={clusterId} target={target} />}
       <MetricsSection clusterId={clusterId} resource={resource} target={target} />
       <dl className="grid grid-cols-[110px_1fr] gap-y-1.5">
@@ -507,6 +505,10 @@ function Overview({
           ))}
         </div>
       </Section>
+
+      {resource.name === 'pods' && (
+        <PodEnvironment clusterId={clusterId} ns={target.ns} pod={target.name} />
+      )}
     </div>
   )
 }

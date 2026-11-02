@@ -22,7 +22,7 @@ import {
   type Widths,
 } from '../lib/colwidths'
 import { computeRows, moveSelection, usageKey } from '../lib/tablerows'
-import { desiredReplicas, RESTARTABLE, SCALABLE } from '../lib/workloads'
+import { replicaCounts, RESTARTABLE, SCALABLE } from '../lib/workloads'
 import type { Column, Row } from '../lib/types'
 import { formatBytes, formatCPU } from '../lib/units'
 import { useRowStoreVersion } from '../lib/useRowStore'
@@ -103,7 +103,12 @@ function ResizeHandle({
 }
 
 /** Width of the hover actions, so they sit at the right edge of the name column. */
-const actionsWidth = (...on: boolean[]) => on.filter(Boolean).length * 28 + 8
+const ACTION_W = { forward: 74, scale: 62, restart: 72 }
+const actionsWidth = (forward: boolean, scale: boolean, restart: boolean) =>
+  (forward ? ACTION_W.forward : 0) +
+  (scale ? ACTION_W.scale : 0) +
+  (restart ? ACTION_W.restart : 0) +
+  8
 
 function RowButton({
   label,
@@ -124,7 +129,7 @@ function RowButton({
       }}
       title={title}
       aria-label={label}
-      className="grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-surface text-muted hover:border-accent hover:text-accent focus-visible:opacity-100"
+      className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border bg-surface px-1.5 text-[11px] font-medium text-muted hover:border-accent hover:text-accent focus-visible:opacity-100"
     >
       {children}
     </button>
@@ -186,6 +191,18 @@ export function ResourceTable({
     } catch (e) {
       toast('error', e instanceof Error ? e.message : String(e))
     }
+  }
+
+  /** Opens the forward dialog for a row: ports are discovered, the local port and browser choice are explicit. */
+  const forwardDialogFor = (r: Row) => {
+    if (!clusterId || !selectedKey) return
+    setFwdDialog({
+      clusterId,
+      kind: FORWARD_KIND[resourceName],
+      ns: r.ns,
+      name: r.name,
+      resourceKey: selectedKey,
+    })
   }
 
   /** One click: free local port, reuse an existing identical forward; asks only when several ports exist. */
@@ -434,11 +451,19 @@ export function ResourceTable({
                     y: e.clientY,
                     items: [
                       ...(canForward
-                        ? [{ label: 'Forward (auto port)', onClick: () => void forwardRow(r) }]
+                        ? [
+                            { label: 'Port forward…', onClick: () => forwardDialogFor(r) },
+                            {
+                              label: 'Quick forward (free port)',
+                              onClick: () => void forwardRow(r),
+                            },
+                          ]
                         : []),
-                      ...(canScale ? [{ label: 'Scale…', onClick: () => setScaleDlg(r) }] : []),
+                      ...(canScale
+                        ? [{ label: 'Scale replicas…', onClick: () => setScaleDlg(r) }]
+                        : []),
                       ...(canRestart
-                        ? [{ label: 'Restart…', onClick: () => setRestartDlg(r) }]
+                        ? [{ label: 'Rolling restart…', onClick: () => setRestartDlg(r) }]
                         : []),
                       { label: 'Edit YAML', onClick: () => onAction('edit', ref) },
                       {
@@ -480,28 +505,28 @@ export function ResourceTable({
                     {canForward && (
                       <RowButton
                         label={`Forward ${r.name}`}
-                        title="Forward: one click, free local port"
-                        onClick={() => void forwardRow(r)}
+                        title="Port forward: choose the port and open it in the browser"
+                        onClick={() => forwardDialogFor(r)}
                       >
-                        <Cable size={13} />
+                        <Cable size={12} aria-hidden /> Forward
                       </RowButton>
                     )}
                     {canScale && (
                       <RowButton
                         label={`Scale ${r.name}`}
-                        title="Scale"
+                        title="Scale: change the number of replicas"
                         onClick={() => setScaleDlg(r)}
                       >
-                        <Scaling size={13} />
+                        <Scaling size={12} aria-hidden /> Scale
                       </RowButton>
                     )}
                     {canRestart && (
                       <RowButton
                         label={`Restart ${r.name}`}
-                        title="Rolling restart"
+                        title="Rolling restart: replace the pods one by one"
                         onClick={() => setRestartDlg(r)}
                       >
-                        <RotateCw size={13} />
+                        <RotateCw size={12} aria-hidden /> Restart
                       </RowButton>
                     )}
                   </div>
@@ -525,7 +550,9 @@ export function ResourceTable({
       {scaleDlg && clusterId && selectedKey && (
         <ScaleDialog
           name={scaleDlg.name}
-          initial={desiredReplicas(scaleDlg.cells)}
+          kind={resourceName.replace(/s$/, '')}
+          initial={replicaCounts(scaleDlg.cells)?.desired ?? null}
+          ready={replicaCounts(scaleDlg.cells)?.ready ?? null}
           onClose={() => setScaleDlg(null)}
           onScale={(n) =>
             act(`Scaled ${scaleDlg.name} to ${n}`, () =>

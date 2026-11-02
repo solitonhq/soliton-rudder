@@ -28,11 +28,40 @@ describe('ScaleDialog', () => {
     expect((screen.getByRole('button', { name: 'Scale' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('shows desired and ready counts, steps with +/- and presets, and previews the change', () => {
+    const onScale = vi.fn().mockResolvedValue(undefined)
+    render(
+      <ScaleDialog
+        name="web"
+        kind="deployment"
+        initial={3}
+        ready={2}
+        onClose={vi.fn()}
+        onScale={onScale}
+      />,
+    )
+    expect(screen.getByText('Desired now').nextSibling?.textContent).toBe('3')
+    expect(screen.getByText('Ready now').nextSibling?.textContent).toBe('2')
+    // nothing to do while the count is unchanged
+    expect(
+      (screen.getByRole('button', { name: /^Scale to 3$/ }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(screen.getByText(/Already at 3 replicas/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Increase' }))
+    expect(screen.getByText(/\+1 pod\b/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '10' }))
+    expect(screen.getByText(/\+7 pods/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Decrease' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Scale to 9' }))
+    expect(onScale).toHaveBeenCalledWith(9)
+  })
+
   it('rejects non-numbers and warns that 0 stops everything', () => {
     render(<ScaleDialog name="web" initial={1} onClose={vi.fn()} onScale={vi.fn()} />)
     const input = screen.getByLabelText('Replicas')
     fireEvent.change(input, { target: { value: '-2' } })
     expect((screen.getByRole('button', { name: 'Scale' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/whole number from 0/)).toBeTruthy()
     fireEvent.change(input, { target: { value: '0' } })
     expect(screen.getByText(/stops every replica of web/)).toBeTruthy()
   })

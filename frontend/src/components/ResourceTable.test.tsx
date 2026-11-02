@@ -93,7 +93,7 @@ describe('row actions on workloads', () => {
     expect(useExplorer.getState().selected).toBeNull() // the click did not open the detail panel
     fireEvent.change(input, { target: { value: '5' } })
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Scale' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Scale to 5' }))
     })
     expect(scale).toHaveBeenCalledWith('c1', 'apps/v1/deployments', 'shop', 'web', 5)
   })
@@ -113,8 +113,26 @@ describe('row actions on workloads', () => {
     seed('apps/v1/deployments', [['web', '3/3']])
     render(<ResourceTable namespaced resourceName="deployments" onAction={vi.fn()} />)
     fireEvent.contextMenu(screen.getByRole('row', { name: /web/ }))
-    expect(screen.getByText('Scale…')).toBeTruthy()
-    expect(screen.getByText('Restart…')).toBeTruthy()
+    expect(screen.getByText('Scale replicas…')).toBeTruthy()
+    expect(screen.getByText('Rolling restart…')).toBeTruthy()
+    expect(screen.getByText('Port forward…')).toBeTruthy()
+    expect(screen.getByText('Quick forward (free port)')).toBeTruthy()
+  })
+
+  it('labels the row buttons so they can be told apart', () => {
+    seed('apps/v1/deployments', [['web', '3/3']])
+    render(<ResourceTable namespaced resourceName="deployments" onAction={vi.fn()} />)
+    for (const name of ['Forward web', 'Scale web', 'Restart web'])
+      expect(screen.getByLabelText(name).textContent?.trim()).toBe(name.split(' ')[0])
+  })
+
+  it('opens the port forward dialog from the row instead of forwarding blindly', async () => {
+    seed('apps/v1/deployments', [['web', '3/3']])
+    render(<ResourceTable namespaced resourceName="deployments" onAction={vi.fn()} />)
+    fireEvent.click(screen.getByLabelText('Forward web'))
+    expect(await screen.findByText('Port forward')).toBeTruthy()
+    expect(screen.getByLabelText(/Remote port/)).toBeTruthy()
+    expect(useExplorer.getState().selected).toBeNull()
   })
 })
 
