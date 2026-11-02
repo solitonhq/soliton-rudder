@@ -119,11 +119,15 @@ describe('row actions on workloads', () => {
     expect(screen.getByText('Quick forward (free port)')).toBeTruthy()
   })
 
-  it('labels the row buttons so they can be told apart', () => {
+  it('row buttons are icon-only, named for screen readers and explained by their tooltip', () => {
     seed('apps/v1/deployments', [['web', '3/3']])
     render(<ResourceTable namespaced resourceName="deployments" onAction={vi.fn()} />)
-    for (const name of ['Forward web', 'Scale web', 'Restart web'])
-      expect(screen.getByLabelText(name).textContent?.trim()).toBe(name.split(' ')[0])
+    for (const name of ['Forward web', 'Scale web', 'Restart web']) {
+      const b = screen.getByLabelText(name)
+      expect(b.textContent?.trim()).toBe('') // no words next to the icons
+      expect(b.querySelector('svg')).toBeTruthy()
+      expect(b.getAttribute('title')).toBeTruthy()
+    }
   })
 
   it('opens the port forward dialog from the row instead of forwarding blindly', async () => {
