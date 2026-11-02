@@ -1,11 +1,11 @@
 import clsx from 'clsx'
 import {
+  ArrowRightLeft,
   Bug,
-  Cable,
+  Layers,
   Maximize2,
   Minimize2,
   RotateCw,
-  Scaling,
   ScrollText,
   SquareTerminal,
   Trash2,
@@ -211,12 +211,12 @@ export function DetailPanel({
           )}
           {FORWARDABLE.has(resource.name) && (
             <Button variant="ghost" title="Forward a port" onClick={() => setForwardOpen(true)}>
-              <Cable size={14} /> Forward
+              <ArrowRightLeft size={14} /> Forward
             </Button>
           )}
           {SCALABLE.has(resource.name) && (
             <Button variant="ghost" onClick={() => setScaleOpen(true)} title="Scale">
-              <Scaling size={14} /> Scale
+              <Layers size={14} /> Scale
             </Button>
           )}
           {RESTARTABLE.has(resource.name) && (

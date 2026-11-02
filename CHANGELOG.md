@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org/) (0.x: minor vers
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-11-02
+
+### Changed
+- Workload row buttons are icon-only again, with clearer icons: port forward (⇄), scale (stacked layers), restart
+  (rotate). The tooltips and the right-click menu say what each one does. The same icons are used in the detail panel.
+
 ## [0.2.3] - 2026-11-02
 
 ### Added
@@ -187,7 +193,8 @@ First public release (pre-release): macOS only, unsigned build.
 - Clicking a namespace in an all-namespaces table filters to that namespace.
 - App icon follows the macOS icon grid (artwork inset with margin), so it no longer looks oversized in the Dock.
 
-[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.0...v0.2.1

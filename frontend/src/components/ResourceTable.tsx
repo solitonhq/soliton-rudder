@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import clsx from 'clsx'
-import { ArrowDown, ArrowUp, Cable, RotateCw, Scaling } from 'lucide-react'
+import { ArrowDown, ArrowRightLeft, ArrowUp, Layers, RotateCw } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   cellText,
@@ -103,12 +103,7 @@ function ResizeHandle({
 }
 
 /** Width of the hover actions, so they sit at the right edge of the name column. */
-const ACTION_W = { forward: 74, scale: 62, restart: 72 }
-const actionsWidth = (forward: boolean, scale: boolean, restart: boolean) =>
-  (forward ? ACTION_W.forward : 0) +
-  (scale ? ACTION_W.scale : 0) +
-  (restart ? ACTION_W.restart : 0) +
-  8
+const actionsWidth = (...on: boolean[]) => on.filter(Boolean).length * 28 + 8
 
 function RowButton({
   label,
@@ -129,7 +124,7 @@ function RowButton({
       }}
       title={title}
       aria-label={label}
-      className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-md border border-border bg-surface px-1.5 text-[11px] font-medium text-muted hover:border-accent hover:text-accent focus-visible:opacity-100"
+      className="grid size-6 cursor-pointer place-items-center rounded-md border border-border bg-surface text-muted hover:border-accent hover:text-accent focus-visible:opacity-100"
     >
       {children}
     </button>
@@ -508,7 +503,7 @@ export function ResourceTable({
                         title="Port forward: choose the port and open it in the browser"
                         onClick={() => forwardDialogFor(r)}
                       >
-                        <Cable size={12} aria-hidden /> Forward
+                        <ArrowRightLeft size={13} aria-hidden />
                       </RowButton>
                     )}
                     {canScale && (
@@ -517,7 +512,7 @@ export function ResourceTable({
                         title="Scale: change the number of replicas"
                         onClick={() => setScaleDlg(r)}
                       >
-                        <Scaling size={12} aria-hidden /> Scale
+                        <Layers size={13} aria-hidden />
                       </RowButton>
                     )}
                     {canRestart && (
@@ -526,7 +521,7 @@ export function ResourceTable({
                         title="Rolling restart: replace the pods one by one"
                         onClick={() => setRestartDlg(r)}
                       >
-                        <RotateCw size={12} aria-hidden /> Restart
+                        <RotateCw size={13} aria-hidden />
                       </RowButton>
                     )}
                   </div>
