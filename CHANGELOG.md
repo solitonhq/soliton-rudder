@@ -5,6 +5,18 @@ and the project uses [Semantic Versioning](https://semver.org/) (0.x: minor vers
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-02
+
+### Added
+- Detail panel: drag its left edge to resize (double-click resets; the width is remembered) or use the new
+  widen/narrow button.
+- Pod "Environment & mounts": **Show all values** fetches every referenced Secret and ConfigMap value on request and
+  hides them again after 30 seconds.
+
+### Fixed
+- Ingress details: the Backends table scrolls horizontally instead of clipping the Service IP and Pod IP columns.
+- Update checks now work while only pre-releases exist.
+
 ## [0.2.0] - 2026-11-01
 
 The first round of product feedback after the 0.1.0 pre-release: terminals can no longer leak between clusters, and
@@ -152,7 +164,8 @@ First public release (pre-release): macOS only, unsigned build.
 - Clicking a namespace in an all-namespaces table filters to that namespace.
 - App icon follows the macOS icon grid (artwork inset with margin), so it no longer looks oversized in the Dock.
 
-[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/solitonhq/soliton-rudder/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/solitonhq/soliton-rudder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/solitonhq/soliton-rudder/releases/tag/v0.1.0
 
