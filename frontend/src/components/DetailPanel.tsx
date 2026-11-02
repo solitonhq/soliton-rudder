@@ -1,5 +1,16 @@
 import clsx from 'clsx'
-import { Bug, Cable, RotateCw, Scaling, ScrollText, SquareTerminal, Trash2, X } from 'lucide-react'
+import {
+  Bug,
+  Cable,
+  Maximize2,
+  Minimize2,
+  RotateCw,
+  Scaling,
+  ScrollText,
+  SquareTerminal,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { insight, kube } from '../lib/backend'
 import { formatAge } from '../lib/format'
@@ -41,6 +52,20 @@ const LOGGABLE = new Set([
   'replicationcontrollers',
 ])
 
+const DEFAULT_WIDTH = 560
+const WIDE_WIDTH = 1040
+const MIN_WIDTH = 400
+const WIDTH_KEY = 'rudder.detailWidth'
+
+function loadWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(WIDTH_KEY))
+    return n >= MIN_WIDTH ? n : DEFAULT_WIDTH
+  } catch {
+    return DEFAULT_WIDTH
+  }
+}
+
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 export type DetailTab = 'overview' | 'events' | 'data' | 'yaml'
@@ -68,6 +93,7 @@ export function DetailPanel({
   const [scaleOpen, setScaleOpen] = useState(false)
   const [forwardOpen, setForwardOpen] = useState(false)
   const [debugOpen, setDebugOpen] = useState(false)
+  const [width, setWidth] = useState(loadWidth)
   const openTab = useDock((s) => s.openTab)
   const hasData = resource.name === 'configmaps' || resource.name === 'secrets'
   const tab: DetailTab =
@@ -86,6 +112,28 @@ export function DetailPanel({
     'yaml',
   ]
 
+  const resize = (w: number) => {
+    setWidth(w)
+    try {
+      localStorage.setItem(WIDTH_KEY, String(w))
+    } catch {
+      /* the width just is not remembered */
+    }
+  }
+  const wide = width > (DEFAULT_WIDTH + WIDE_WIDTH) / 2
+  // drag the left edge; the panel grows leftwards, so the width is the distance to the right edge
+  const startDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const right = e.currentTarget.parentElement?.getBoundingClientRect().right ?? 0
+    const move = (ev: PointerEvent) => resize(Math.max(MIN_WIDTH, Math.round(right - ev.clientX)))
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+
   const run = async (label: string, fn: () => Promise<void>) => {
     try {
       await fn()
@@ -96,7 +144,18 @@ export function DetailPanel({
   }
 
   return (
-    <aside className="flex w-[560px] max-w-[60%] shrink-0 flex-col border-l border-border bg-surface">
+    <aside
+      style={{ width }}
+      className="relative flex max-w-[85%] shrink-0 flex-col border-l border-border bg-surface"
+    >
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panel"
+        onPointerDown={startDrag}
+        onDoubleClick={() => resize(DEFAULT_WIDTH)}
+        className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-accent/30"
+      />
       <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{target.name}</div>
@@ -180,6 +239,14 @@ export function DetailPanel({
             title="Delete"
           >
             <Trash2 size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => resize(wide ? DEFAULT_WIDTH : WIDE_WIDTH)}
+            title={wide ? 'Narrow the panel' : 'Widen the panel'}
+            aria-label={wide ? 'Narrow the panel' : 'Widen the panel'}
+          >
+            {wide ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
           </Button>
           <Button variant="ghost" onClick={onClose} aria-label="Close">
             <X size={15} />

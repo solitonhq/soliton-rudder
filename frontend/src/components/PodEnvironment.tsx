@@ -1,11 +1,15 @@
 import { Check, Copy, Eye, EyeOff, KeyRound, SquareArrowOutUpRight } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { kube } from '../lib/backend'
 import type { ContainerEnv, EnvFromRef, EnvVar, PodEnv, PodVolume } from '../lib/types'
 import { useExplorer } from '../store/explorer'
 import { useUI } from '../store/ui'
 
 const REVEAL_MS = 30_000
+
+/** "Show all" / "Hide all" from the section header; each value reacts to a new sequence number. */
+type Bulk = { seq: number; action: 'show' | 'hide' }
+const BulkContext = createContext<Bulk>({ seq: 0, action: 'hide' })
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** Jump to the Secret or ConfigMap list, filtered to the one referenced. */
@@ -30,6 +34,7 @@ export function PodEnvironment({
 }) {
   const [env, setEnv] = useState<PodEnv | null>(null)
   const [error, setError] = useState('')
+  const [bulk, setBulk] = useState<Bulk>({ seq: 0, action: 'hide' })
 
   useEffect(() => {
     let cancelled = false
@@ -45,12 +50,34 @@ export function PodEnvironment({
   const containers =
     env?.containers.filter((c) => c.env.length || c.envFrom.length || c.mounts.length) ?? []
   const volumes = env?.volumes ?? []
+  const hasRefs = containers.some((c) =>
+    c.env.some((e) => e.source === 'secret' || e.source === 'configmap'),
+  )
+  const revealed = bulk.action === 'show'
+  // the values hide themselves; keep the button label honest
+  useEffect(() => {
+    if (!revealed) return
+    const t = setTimeout(() => setBulk((b) => ({ seq: b.seq + 1, action: 'hide' })), REVEAL_MS)
+    return () => clearTimeout(t)
+  }, [revealed, bulk.seq])
 
   return (
     <section className="mb-4 mt-5" aria-label="Environment and mounts">
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        Environment &amp; mounts
-      </h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          Environment &amp; mounts
+        </h3>
+        {hasRefs && (
+          <button
+            onClick={() => setBulk((b) => ({ seq: b.seq + 1, action: revealed ? 'hide' : 'show' }))}
+            title="Fetch every Secret and ConfigMap value referenced below. They hide again after 30 seconds."
+            className={smallBtn}
+          >
+            {revealed ? <EyeOff size={11} aria-hidden /> : <Eye size={11} aria-hidden />}{' '}
+            {revealed ? 'Hide all values' : 'Show all values'}
+          </button>
+        )}
+      </div>
       {error ? (
         <div className="text-xs text-muted">{error}</div>
       ) : !env ? (
@@ -60,12 +87,14 @@ export function PodEnvironment({
           This pod sets no environment variables and mounts no volumes.
         </div>
       ) : (
-        <div className="space-y-3">
-          {containers.map((c) => (
-            <ContainerBlock key={`${c.init}/${c.name}`} c={c} clusterId={clusterId} ns={ns} />
-          ))}
-          {volumes.length > 0 && <Volumes volumes={volumes} />}
-        </div>
+        <BulkContext.Provider value={bulk}>
+          <div className="space-y-3">
+            {containers.map((c) => (
+              <ContainerBlock key={`${c.init}/${c.name}`} c={c} clusterId={clusterId} ns={ns} />
+            ))}
+            {volumes.length > 0 && <Volumes volumes={volumes} />}
+          </div>
+        </BulkContext.Provider>
       )}
     </section>
   )
@@ -205,7 +234,7 @@ function RefValue({
   // never leave a revealed value behind when the panel goes away
   useEffect(() => hide, [hide])
 
-  const show = async () => {
+  const show = useCallback(async () => {
     setBusy(true)
     setError('')
     try {
@@ -216,7 +245,14 @@ function RefValue({
     } finally {
       setBusy(false)
     }
-  }
+  }, [clusterId, ns, kind, name, keyName, hide])
+  const bulk = useContext(BulkContext)
+  useEffect(() => {
+    if (bulk.seq === 0) return
+    // deferred so the header button is not a synchronous state cascade
+    const t = setTimeout(() => (bulk.action === 'show' ? void show() : hide()), 0)
+    return () => clearTimeout(t)
+  }, [bulk, show, hide])
   const copy = async () => {
     if (value === null) return
     try {

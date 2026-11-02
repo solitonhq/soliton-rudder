@@ -109,7 +109,7 @@ describe('PodEnvironment', () => {
     Object.assign(navigator, { clipboard: { writeText } })
     mount()
     await screen.findByText('DB_PASSWORD')
-    fireEvent.click(screen.getAllByRole('button', { name: /Show/ })[0]!)
+    fireEvent.click(screen.getAllByRole('button', { name: /^Show$/ })[0]!)
     expect(await screen.findByText('s3cr3t!')).toBeTruthy()
     expect(App.GetRefValue).toHaveBeenCalledWith('c1', 'shop', 'secret', 'db', 'password')
     fireEvent.click(screen.getByRole('button', { name: /Copy/ }))
@@ -118,11 +118,23 @@ describe('PodEnvironment', () => {
     expect(screen.queryByText('s3cr3t!')).toBeNull()
   })
 
+  it('shows and hides every referenced value from the section header', async () => {
+    App.GetRefValue!.mockImplementation(async (_c, _n, _k, name: string) => `v-${name}`)
+    mount()
+    await screen.findByText('DB_PASSWORD')
+    fireEvent.click(screen.getByRole('button', { name: /Show all values/ }))
+    expect(await screen.findByText('v-db')).toBeTruthy()
+    expect(await screen.findByText('v-app-config')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Hide all values/ }))
+    await waitFor(() => expect(screen.queryByText('v-db')).toBeNull())
+    expect(screen.queryByText('v-app-config')).toBeNull()
+  })
+
   it('hides a revealed value by itself after 30 seconds', async () => {
     mount()
     await screen.findByText('DB_PASSWORD')
     vi.useFakeTimers()
-    fireEvent.click(screen.getAllByRole('button', { name: /Show/ })[0]!)
+    fireEvent.click(screen.getAllByRole('button', { name: /^Show$/ })[0]!)
     await act(async () => {
       await Promise.resolve()
     })
@@ -137,7 +149,7 @@ describe('PodEnvironment', () => {
     App.GetRefValue!.mockRejectedValue(new Error('secrets "db" is forbidden'))
     mount()
     await screen.findByText('DB_PASSWORD')
-    fireEvent.click(screen.getAllByRole('button', { name: /Show/ })[0]!)
+    fireEvent.click(screen.getAllByRole('button', { name: /^Show$/ })[0]!)
     expect(await screen.findByText(/is forbidden/)).toBeTruthy()
   })
 

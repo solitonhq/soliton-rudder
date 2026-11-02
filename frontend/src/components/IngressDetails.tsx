@@ -149,8 +149,8 @@ export function IngressDetails({ ing, compact = false }: { ing: IngressInfo; com
       {backends.length > 0 && (
         <div>
           <Section title="Backends">
-            <div className="overflow-hidden rounded-lg border border-border">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-max text-xs">
                 <thead className="bg-surface text-left text-[10px] uppercase text-muted">
                   <tr>
                     <th className="px-2.5 py-1.5">Route</th>
